@@ -1,7 +1,29 @@
 {
-  "name": "article-content-renderer-vue2",
+  "name": "@nova_voyager/article-content-renderer-vue2",
   "version": "0.1.0",
   "description": "A safe Vue 2.7 renderer for the Article Content Protocol ProseMirror JSON format.",
+  "author": "NovaVoyager",
+  "license": "MIT",
+  "keywords": [
+    "vue2",
+    "editor",
+    "tiptap",
+    "article-editor",
+    "rich-text-editor",
+    "render"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NovaVoyager/article-editor-render-vue2"
+  },
+  "homepage": "https://github.com/NovaVoyager/article-editor-render-vue2#readme",
+  "bugs": {
+    "url": "https://github.com/NovaVoyager/article-editor-render-vue2/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -30,7 +52,8 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "check": "npm run typecheck && npm run test:run && npm run build"
+    "check": "npm run typecheck && npm run test:run && npm run build",
+    "prepublishOnly": "npm run check"
   },
   "peerDependencies": {
     "vue": "^2.7.16"
@@ -50,6 +73,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "license": "MIT"
+  }
 }

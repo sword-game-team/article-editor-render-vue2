@@ -10,6 +10,9 @@ export default defineConfig({
     },
   },
   build: {
+    // Nuxt 2 / Webpack 4 does not transpile syntax from node_modules by default.
+    // Emit ES2015 so consumers can use the package without extra build config.
+    target: 'es2015',
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
       name: 'ArticleContentRendererVue2',

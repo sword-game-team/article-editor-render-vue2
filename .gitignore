@@ -4,5 +4,6 @@ demo-dist/
 coverage/
 *.local
 *.log
+*.tgz
 .DS_Store
 .idea

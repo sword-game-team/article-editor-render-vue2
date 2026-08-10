@@ -4,13 +4,25 @@ import type {
   RenderIssue,
   ResolveArticleButtonLink,
   ValidationResult,
-} from '../types'
+} from '../types.js'
 
 export interface RenderContext {
   createElement: CreateElement
+  adSlots: readonly AdSlot[]
+  admPublisherId: string
+  adsPublisherId: string
+  adTitle: string
+  imageBaseUrl: string
   resolveArticleButtonLink?: ResolveArticleButtonLink
   emitArticleButtonClick: (payload: ArticleButtonClickPayload) => void
   reportIssue: (issue: RenderIssue) => void
+}
+
+export interface AdSlot {
+  index: number
+  location: number
+  adm: unknown
+  ads: unknown
 }
 
 export interface ProtocolAdapter {

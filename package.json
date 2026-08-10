@@ -1,5 +1,5 @@
 {
-  "name": "@nova_voyager/article-content-renderer-vue2",
+  "name": "article-content-renderer-vue2",
   "version": "0.1.0",
   "description": "A safe Vue 2.7 renderer for the Article Content Protocol ProseMirror JSON format.",
   "author": "NovaVoyager",
@@ -14,11 +14,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/NovaVoyager/article-editor-render-vue2"
+    "url": "git+https://github.com/sword-game-team/article-editor-render-vue2.git"
   },
-  "homepage": "https://github.com/NovaVoyager/article-editor-render-vue2#readme",
+  "homepage": "https://github.com/sword-game-team/article-editor-render-vue2#readme",
   "bugs": {
-    "url": "https://github.com/NovaVoyager/article-editor-render-vue2/issues"
+    "url": "https://github.com/sword-game-team/article-editor-render-vue2/issues"
   },
   "publishConfig": {
     "access": "public",

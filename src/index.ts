@@ -14,9 +14,10 @@ export {
   CURRENT_PROTOCOL_VERSION,
   SUPPORTED_PROTOCOL_VERSIONS,
   validateArticleDocument,
-} from './protocols/registry'
-export { ARTICLE_CONTENT_PROTOCOL_V1 } from './protocols/v1/metadata'
+} from './protocols/registry.js'
+export { ARTICLE_CONTENT_PROTOCOL_V1 } from './protocols/v1/metadata.js'
 export type {
+  AdConfig,
   ArticleButtonAttrs,
   ArticleButtonClickPayload,
   ArticleButtonLink,
@@ -44,6 +45,7 @@ export type {
   OrderedListNode,
   ParagraphNode,
   ProtocolVersion,
+  PubId,
   RenderIssue,
   RenderIssueCode,
   ResolveArticleButtonLink,
@@ -55,4 +57,4 @@ export type {
   TextNode,
   UnderlineMark,
   ValidationResult,
-} from './types'
+} from './types.js'

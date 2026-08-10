@@ -23,12 +23,21 @@ describe('server-side rendering', () => {
                 },
               ],
             },
+            adConf: { adm: ['banner-1'], ads: ['123'], loc: [1] },
+            pubid: {
+              adm: '/23054585162/newsflowly/',
+              ads: '3887371527059481',
+            },
+            adTitle: 'Sponsored',
           },
         }),
     })
 
     const html = await createRenderer().renderToString(app)
     expect(html).toContain('data-node-type="doc"')
+    expect(html).toContain('data-google-ad-manager="true"')
+    expect(html).toContain('/23054585162/newsflowly/banner-1')
+    expect(html).toContain('Sponsored')
     expect(html).toContain('<h1')
     expect(html).toContain('Vue 2 SSR')
     expect(html).toContain('<p')

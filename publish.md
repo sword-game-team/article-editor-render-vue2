@@ -3,13 +3,13 @@
 本文档用于发布和更新 Vue 2 渲染组件：
 
 ```text
-@nova_voyager/article-content-renderer-vue2
+article-content-renderer-vue2
 ```
 
-以下命令默认都在 `editer_render_vue2` 项目根目录执行。当前项目的 `package.json` 已配置：
+以下命令默认都在 `article-editor-render-vue2` 项目根目录执行。当前项目的 `package.json` 已配置：
 
 - npm 官方仓库：`https://registry.npmjs.org/`
-- 公开作用域包：`publishConfig.access = "public"`
+- 公开包：`publishConfig.access = "public"`
 - 发布内容：`dist/`、`protocol/`，以及 npm 自动包含的 `package.json`、`README.md`、`LICENSE`
 - 发布前钩子：`prepublishOnly` 会自动执行 `npm run check`
 - Node.js 要求：`>= 18`
@@ -19,7 +19,7 @@
 ### 1.1 npm 账号和权限
 
 1. 注册并登录 [npm](https://www.npmjs.com/)。
-2. 确认账号拥有 `@nova_voyager` 作用域下该包的发布权限。
+2. 确认当前账号可以发布无 scope 的公开包。
 3. 为 npm 账号开启双重验证（2FA）。直接发布通常需要 2FA，或使用具备相应权限的 granular access token。
 4. 不要把 npm token、一次性验证码或包含凭据的 `.npmrc` 提交到 Git 仓库。
 
@@ -52,7 +52,7 @@ npm pkg get name version publishConfig files main module types exports peerDepen
 
 重点确认：
 
-- 包名为 `@nova_voyager/article-content-renderer-vue2`
+- 包名为 `article-content-renderer-vue2`
 - 版本号是本次准备发布的版本
 - `peerDependencies.vue` 仍符合 Vue 2 使用方的实际版本
 - `main`、`module`、`types`、`exports` 均指向 `dist/` 中存在的文件
@@ -61,7 +61,7 @@ npm pkg get name version publishConfig files main module types exports peerDepen
 如果是首次发布，可以查询包名是否已存在：
 
 ```bash
-npm view @nova_voyager/article-content-renderer-vue2 --registry=https://registry.npmjs.org/
+npm view article-content-renderer-vue2 --registry=https://registry.npmjs.org/
 ```
 
 未发布过时返回 `404` 是正常现象。若包已存在，应先确认自己是维护者，并检查远端已有版本。
@@ -132,14 +132,14 @@ npm pack
 然后在测试项目中安装命令输出的 `.tgz` 文件：
 
 ```bash
-npm install /absolute/path/to/nova_voyager-article-content-renderer-vue2-x.y.z.tgz
+npm install /absolute/path/to/article-content-renderer-vue2-x.y.z.tgz
 ```
 
 测试完成后，本地生成的 `.tgz` 文件不要提交到仓库。
 
 ## 3. 首次正式发布
 
-当前包是 scoped public package。虽然 `package.json` 已配置 `publishConfig.access = "public"`，首次发布仍建议在命令中显式声明公开访问：
+当前包是无 scope 的 public package。`package.json` 已配置 `publishConfig.access = "public"`，首次发布仍可在命令中显式声明公开访问：
 
 ```bash
 npm publish --access public --registry=https://registry.npmjs.org/
@@ -152,26 +152,26 @@ npm publish --access public --registry=https://registry.npmjs.org/
 发布完成后验证：
 
 ```bash
-npm view @nova_voyager/article-content-renderer-vue2 version
-npm view @nova_voyager/article-content-renderer-vue2 dist-tags
-npm view @nova_voyager/article-content-renderer-vue2 files
+npm view article-content-renderer-vue2 version
+npm view article-content-renderer-vue2 dist-tags
+npm view article-content-renderer-vue2 files
 ```
 
 也可以打开包页面：
 
-[https://www.npmjs.com/package/@nova_voyager/article-content-renderer-vue2](https://www.npmjs.com/package/@nova_voyager/article-content-renderer-vue2)
+[https://www.npmjs.com/package/article-content-renderer-vue2](https://www.npmjs.com/package/article-content-renderer-vue2)
 
 再使用一个干净的 Vue 2.7 项目做安装验证：
 
 ```bash
-npm install @nova_voyager/article-content-renderer-vue2@latest vue@2.7.16
+npm install article-content-renderer-vue2@latest vue@2.7.16
 ```
 
 ```ts
 import {
   ArticleContentRenderer,
-} from '@nova_voyager/article-content-renderer-vue2'
-import '@nova_voyager/article-content-renderer-vue2/style.css'
+} from 'article-content-renderer-vue2'
+import 'article-content-renderer-vue2/style.css'
 ```
 
 ## 4. 后续版本更新流程
@@ -239,8 +239,8 @@ npm publish --access public --registry=https://registry.npmjs.org/
 发布成功后验证 npm 远端内容，再推送版本提交和标签：
 
 ```bash
-npm view @nova_voyager/article-content-renderer-vue2 version
-npm view @nova_voyager/article-content-renderer-vue2 dist-tags
+npm view article-content-renderer-vue2 version
+npm view article-content-renderer-vue2 dist-tags
 git push origin HEAD
 git push origin --tags
 ```
@@ -272,13 +272,13 @@ npm publish --tag beta --access public --registry=https://registry.npmjs.org/
 使用方安装 beta：
 
 ```bash
-npm install @nova_voyager/article-content-renderer-vue2@beta
+npm install article-content-renderer-vue2@beta
 ```
 
 查看所有标签：
 
 ```bash
-npm dist-tag ls @nova_voyager/article-content-renderer-vue2
+npm dist-tag ls article-content-renderer-vue2
 ```
 
 Beta 验证完成后，应生成不带预发布后缀的正式版本，再按正式流程发布。不要把未充分验证的 beta 版本直接设置为 `latest`。
@@ -288,19 +288,19 @@ Beta 验证完成后，应生成不带预发布后缀的正式版本，再按正
 升级到最新正式版：
 
 ```bash
-npm install @nova_voyager/article-content-renderer-vue2@latest
+npm install article-content-renderer-vue2@latest
 ```
 
 升级到明确版本：
 
 ```bash
-npm install @nova_voyager/article-content-renderer-vue2@0.2.0
+npm install article-content-renderer-vue2@0.2.0
 ```
 
 确认实际安装版本及 Vue peer dependency：
 
 ```bash
-npm ls @nova_voyager/article-content-renderer-vue2 vue
+npm ls article-content-renderer-vue2 vue
 ```
 
 升级后建议执行使用方项目自己的类型检查、单元测试和正式构建，并人工验证：
@@ -320,7 +320,7 @@ npm 上已经发布的同一个 `package@version` 不能被覆盖。发现问题
 假设 `0.2.0` 有问题：
 
 ```bash
-npm deprecate @nova_voyager/article-content-renderer-vue2@0.2.0 "该版本存在问题，请升级到 0.2.1"
+npm deprecate article-content-renderer-vue2@0.2.0 "该版本存在问题，请升级到 0.2.1"
 ```
 
 修复代码后发布新的 patch 版本：
@@ -333,13 +333,13 @@ npm publish --access public --registry=https://registry.npmjs.org/
 如果错误版本意外占用了 `latest`，而修复版暂时无法立即发布，可以先把 `latest` 指回已验证的稳定版本：
 
 ```bash
-npm dist-tag add @nova_voyager/article-content-renderer-vue2@0.1.0 latest
+npm dist-tag add article-content-renderer-vue2@0.1.0 latest
 ```
 
 执行前务必把示例中的版本改为真实的最后稳定版本，并在执行后检查：
 
 ```bash
-npm dist-tag ls @nova_voyager/article-content-renderer-vue2
+npm dist-tag ls article-content-renderer-vue2
 ```
 
 ### 7.2 谨慎使用 unpublish
@@ -347,7 +347,7 @@ npm dist-tag ls @nova_voyager/article-content-renderer-vue2
 `npm unpublish` 会影响已经依赖该版本的项目，通常应优先使用 `npm deprecate`。只有确认符合 npm 当前 unpublish policy 且确实必须删除时才执行：
 
 ```bash
-npm unpublish @nova_voyager/article-content-renderer-vue2@0.2.0
+npm unpublish article-content-renderer-vue2@0.2.0
 ```
 
 即使删除成功，该版本号也不能再次使用，仍需发布一个新版本。执行前请阅读 npm 的最新政策：
@@ -357,7 +357,7 @@ npm unpublish @nova_voyager/article-content-renderer-vue2@0.2.0
 
 ## 8. 每次正式发布检查清单
 
-- [ ] 当前 npm 账号正确，并拥有 `@nova_voyager` 发布权限
+- [ ] 当前 npm 账号正确，并可以发布无 scope 公开包
 - [ ] Git 分支和工作区状态正确
 - [ ] 没有密钥、token、账号或内部敏感信息进入发布内容
 - [ ] 协议、类型、校验、渲染、测试、Demo 和 README 已同步
@@ -390,17 +390,17 @@ npm version patch -m "release: v%s"
 npm publish --access public --registry=https://registry.npmjs.org/
 
 # 查询远端
-npm view @nova_voyager/article-content-renderer-vue2 version
-npm view @nova_voyager/article-content-renderer-vue2 versions --json
-npm dist-tag ls @nova_voyager/article-content-renderer-vue2
+npm view article-content-renderer-vue2 version
+npm view article-content-renderer-vue2 versions --json
+npm dist-tag ls article-content-renderer-vue2
 
 # 使用方升级
-npm install @nova_voyager/article-content-renderer-vue2@latest
+npm install article-content-renderer-vue2@latest
 ```
 
 npm 官方参考：
 
-- [Creating and publishing scoped public packages](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)
+- [Creating and publishing unscoped public packages](https://docs.npmjs.com/creating-and-publishing-unscoped-public-packages/)
 - [npm publish](https://docs.npmjs.com/cli/commands/npm-publish/)
 - [npm version](https://docs.npmjs.com/cli/commands/npm-version/)
 - [npm dist-tag](https://docs.npmjs.com/cli/commands/npm-dist-tag/)

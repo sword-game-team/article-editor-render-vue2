@@ -17,7 +17,6 @@ export {
 } from './protocols/registry.js'
 export { ARTICLE_CONTENT_PROTOCOL_V1 } from './protocols/v1/metadata.js'
 export type {
-  AdConfig,
   ArticleButtonAttrs,
   ArticleButtonClickPayload,
   ArticleButtonLink,
@@ -34,6 +33,7 @@ export type {
   CodeBlockNode,
   CodeBlockTextNode,
   CodeMark,
+  CustomSlot,
   HeadingNode,
   HorizontalRuleNode,
   ImageAlign,
@@ -45,7 +45,6 @@ export type {
   OrderedListNode,
   ParagraphNode,
   ProtocolVersion,
-  PubId,
   RenderIssue,
   RenderIssueCode,
   ResolveArticleButtonLink,

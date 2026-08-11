@@ -23,21 +23,24 @@ describe('server-side rendering', () => {
                 },
               ],
             },
-            adConf: { adm: ['banner-1'], ads: ['123'], loc: [1] },
-            pubid: {
-              adm: '/23054585162/newsflowly/',
-              ads: '3887371527059481',
-            },
-            adTitle: 'Sponsored',
+            customSlots: [{ id: 'ssr-slot', location: 1 }],
+          },
+          scopedSlots: {
+            'ssr-slot': () => [
+              createElement(
+                'aside',
+                { attrs: { 'data-custom-slot': 'ssr-slot' } },
+                'SSR custom slot',
+              ),
+            ],
           },
         }),
     })
 
     const html = await createRenderer().renderToString(app)
     expect(html).toContain('data-node-type="doc"')
-    expect(html).toContain('data-google-ad-manager="true"')
-    expect(html).toContain('/23054585162/newsflowly/banner-1')
-    expect(html).toContain('Sponsored')
+    expect(html).toContain('data-custom-slot="ssr-slot"')
+    expect(html).toContain('SSR custom slot')
     expect(html).toContain('<h1')
     expect(html).toContain('Vue 2 SSR')
     expect(html).toContain('<p')

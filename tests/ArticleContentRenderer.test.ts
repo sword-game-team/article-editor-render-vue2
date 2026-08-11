@@ -2,7 +2,7 @@
 
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import ArticleContentRenderer, {
   type ArticleButtonClickPayload,
   type ArticleButtonNode,
@@ -99,195 +99,58 @@ const completeDocument: ArticleDocument = {
   ],
 }
 
-interface MockGoogleTagSlot {
-  addService: ReturnType<typeof vi.fn>
-}
-
-interface MockSlotRenderEndedEvent {
-  slot: MockGoogleTagSlot
-  isEmpty: boolean
-}
-
-function installGoogleTagMock() {
-  let slotRenderEnded: ((event: MockSlotRenderEndedEvent) => void) | undefined
-  const slot = {} as MockGoogleTagSlot
-  const pubAds = {
-    addEventListener: vi.fn(
-      (_eventName: string, listener: (event: MockSlotRenderEndedEvent) => void) => {
-        slotRenderEnded = listener
-      },
-    ),
-    removeEventListener: vi.fn(),
-  }
-  slot.addService = vi.fn(() => slot)
-
-  const googletag = {
-    cmd: {
-      push: vi.fn((callback: () => void) => {
-        callback()
-        return 1
-      }),
-    },
-    defineSlot: vi.fn(() => slot),
-    pubads: vi.fn(() => pubAds),
-    enableServices: vi.fn(),
-    display: vi.fn(),
-    destroySlots: vi.fn(() => true),
-  }
-
-  ;(window as Window & { googletag?: unknown }).googletag = googletag
-
-  return {
-    googletag,
-    slot,
-    emitSlotRenderEnded(isEmpty: boolean) {
-      slotRenderEnded?.({ slot, isEmpty })
-    },
-  }
-}
-
-beforeEach(() => {
-  vi.spyOn(console, 'log').mockImplementation(() => undefined)
-  vi.spyOn(console, 'error').mockImplementation(() => undefined)
-})
-
-afterEach(() => {
-  delete (window as Window & { googletag?: unknown }).googletag
-  delete (window as Window & { adsbygoogle?: unknown }).adsbygoogle
-  vi.restoreAllMocks()
-})
-
 describe('ArticleContentRenderer', () => {
-  it('validates aligned adConf arrays and inserts one-based ad slots', async () => {
-    const document = {
-      type: 'doc',
-      content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'First' }] },
-        { type: 'paragraph', content: [{ type: 'text', text: 'Second' }] },
-      ],
-    }
-    const valid = mount(ArticleContentRenderer, {
-      propsData: {
-        document,
-        adConf: { ads: ['123'], loc: [2] },
-      },
-    })
-
-    const children = Array.from(valid.element.children)
-    expect(children.map((element) => element.className)).toEqual([
-      'acp-paragraph',
-      'acp-ad-slot',
-      'acp-paragraph',
-    ])
-    expect(valid.get('.acp-ad-slot').attributes()).toMatchObject({
-      'data-ad-index': '1',
-      'data-ad-location': '2',
-      'data-ads': '123',
-    })
-
-    const invalid = mount(ArticleContentRenderer, {
-      propsData: {
-        document,
-        adConf: { adm: ['one', 'two'], ads: ['123'], loc: [1, 2] },
-      },
-    })
-    await nextTick()
-
-    const issues = (invalid.emitted('render-error') ?? []).map(([issue]) => issue as RenderIssue)
-    expect(issues).toContainEqual(
-      expect.objectContaining({ code: 'AD_CONFIG_LENGTH_MISMATCH', path: '/adConf' }),
-    )
-    expect(invalid.find('.acp-ad-slot').exists()).toBe(false)
-  })
-
-  it('ignores ad locations beyond the document content length', () => {
+  it('inserts multiple named custom slots before one-based document positions', () => {
     const wrapper = mount(ArticleContentRenderer, {
       propsData: {
         document: {
           type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Only' }] }],
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'First' }] },
+            { type: 'paragraph', content: [{ type: 'text', text: 'Second' }] },
+            { type: 'paragraph', content: [{ type: 'text', text: 'Third' }] },
+          ],
         },
-        adConf: { ads: ['123'], loc: [5] },
+        customSlots: [
+          { id: 'promo', location: 2 },
+          { id: 'firstAd', location: 2 },
+          { id: 'secondAd', location: 3 },
+        ],
+      },
+      scopedSlots: {
+        promo: '<aside data-custom-slot="promo">Promo</aside>',
+        firstAd: '<div data-custom-slot="first-ad">First ad</div>',
+        secondAd: '<div data-custom-slot="second-ad">Second ad</div>',
       },
     })
 
-    expect(wrapper.find('.acp-ad-slot').exists()).toBe(false)
+    const children = Array.from(wrapper.element.children)
+    expect(
+      children.map((element) => element.getAttribute('data-custom-slot') ?? element.textContent),
+    ).toEqual(['First', 'promo', 'first-ad', 'Second', 'second-ad', 'Third'])
   })
 
-  it('renders AdSense with a configurable title and matching publisher and slot ids', () => {
+  it('ignores invalid or out-of-range custom slot locations', () => {
     const wrapper = mount(ArticleContentRenderer, {
       propsData: {
         document: {
           type: 'doc',
           content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Content' }] }],
         },
-        adConf: { ads: ['123'], loc: [1] },
-        pubid: { adm: '', ads: '3887371527059481' },
-        adTitle: 'Sponsored',
+        customSlots: [
+          { id: 'zero', location: 0 },
+          { id: 'fraction', location: 1.5 },
+          { id: 'missing', location: 2 },
+        ],
+      },
+      scopedSlots: {
+        zero: '<div data-custom-slot="zero" />',
+        fraction: '<div data-custom-slot="fraction" />',
+        missing: '<div data-custom-slot="missing" />',
       },
     })
 
-    expect(wrapper.get('.article-ad-title').element.tagName).toBe('DIV')
-    expect(wrapper.get('.article-ad-title').text()).toBe('Sponsored')
-    expect(wrapper.get('ins.adsbygoogle').attributes()).toMatchObject({
-      'data-ad-client': 'ca-pub-3887371527059481',
-      'data-ad-slot': '123',
-    })
-    expect(wrapper.get('ins.adsbygoogle').attributes('style')).not.toContain('height')
-  })
-
-  it('prioritizes ADM and falls back to the matching AdSense slot only when ADM is empty', async () => {
-    const { googletag, emitSlotRenderEnded } = installGoogleTagMock()
-    const wrapper = mount(ArticleContentRenderer, {
-      propsData: {
-        document: {
-          type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Content' }] }],
-        },
-        adConf: { adm: ['native-1'], ads: ['123'], loc: [1] },
-        pubid: { adm: '/23054585162/newsflowly/', ads: '3887371527059481' },
-      },
-    })
-
-    expect(wrapper.find('.article-adm-wrapper').exists()).toBe(true)
-    expect(wrapper.find('ins.adsbygoogle').exists()).toBe(false)
-    expect(googletag.defineSlot).toHaveBeenCalledWith(
-      '/23054585162/newsflowly/native-1',
-      'fluid',
-      'native-1',
-    )
-
-    emitSlotRenderEnded(false)
-    await nextTick()
-    expect(wrapper.find('.article-adm-wrapper').exists()).toBe(true)
-
-    emitSlotRenderEnded(true)
-    await nextTick()
-    await nextTick()
-    expect(wrapper.find('.article-adm-wrapper').exists()).toBe(false)
-    expect(wrapper.get('ins.adsbygoogle').attributes()).toMatchObject({
-      'data-ad-client': 'ca-pub-3887371527059481',
-      'data-ad-slot': '123',
-    })
-  })
-
-  it('does not request AdSense when an ADM-only slot is empty', async () => {
-    const { emitSlotRenderEnded } = installGoogleTagMock()
-    const wrapper = mount(ArticleContentRenderer, {
-      propsData: {
-        document: {
-          type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Content' }] }],
-        },
-        adConf: { adm: ['native-only'], loc: [1] },
-        pubid: { adm: '/23054585162/newsflowly/', ads: '' },
-      },
-    })
-
-    emitSlotRenderEnded(true)
-    await nextTick()
-    expect(wrapper.find('.article-adm-wrapper').exists()).toBe(true)
-    expect(wrapper.find('ins.adsbygoogle').exists()).toBe(false)
+    expect(wrapper.find('[data-custom-slot]').exists()).toBe(false)
   })
 
   it('replaces only the default image base URL', async () => {

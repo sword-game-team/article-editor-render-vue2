@@ -110,72 +110,67 @@ import 'article-content-renderer-vue2/style.css'
 Vue.use(ArticleContentRendererPlugin)
 ```
 
-## 广告与图片地址
+## 自定义插槽与图片地址
 
-广告参数与 React 版保持一致：
+通过 `customSlots` 描述插槽位置，再使用与 `id` 同名的具名插槽传入任意 Vue 内容：
 
 ```ts
-interface AdConfig {
-  adm?: readonly unknown[]
-  ads?: readonly unknown[]
-  loc: readonly number[]
-}
-
-interface PubId {
-  adm: string
-  ads: string
+interface CustomSlot {
+  id: string
+  location: number
 }
 ```
 
 ```vue
-<ArticleContentRenderer
-  :document="article"
-  :ad-conf="{
-    adm: ['banner-1', 'banner-2'],
-    ads: ['123', '456'],
-    loc: [2, 5],
-  }"
-  :pubid="{
-    adm: '/23054585162/newsflowly/',
-    ads: '3887371527059481',
-  }"
-  ad-title="Advertisement"
-  image-base-url="https://cdn.example.com/"
-  @render-error="handleRenderError"
-/>
+<script lang="ts">
+import Vue from 'vue'
+import type { CustomSlot } from 'article-content-renderer-vue2'
+
+export default Vue.extend({
+  data() {
+    return {
+      customSlots: [
+        { id: 'article-ad-1', location: 2 },
+        { id: 'recommendation', location: 5 },
+        { id: 'article-ad-2', location: 5 },
+      ] as CustomSlot[],
+    }
+  },
+})
+</script>
+
+<template>
+  <ArticleContentRenderer
+    :document="article"
+    :custom-slots="customSlots"
+  >
+    <template #article-ad-1>
+      <MyAd slot-id="top" />
+    </template>
+
+    <template #recommendation>
+      <RecommendationCard />
+    </template>
+
+    <template #article-ad-2>
+      <MyAd slot-id="middle" />
+    </template>
+  </ArticleContentRenderer>
+</template>
 ```
 
-`loc` 使用从 1 开始的 `document.content` 顶层位置，广告会插入在对应元素前面。位置超出文档长度时直接忽略。每个非空 `adm`/`ads` 数组的长度都必须与 `loc` 一致，否则不生成广告占位，并通过 `render-error` 上报 `AD_CONFIG_LENGTH_MISMATCH`。
+插槽规则：
 
-广告选择规则：
+- `location` 从 1 开始；`location: 5` 表示插入到 `document.content[4]` 之前。
+- 同一个 `location` 可以配置多个不同 `id`，并按照数组中的顺序渲染。
+- `id` 应当唯一，并且必须与具名插槽名称一致。
+- 非正整数或超过 `document.content` 长度的位置会被忽略。
+- 渲染器不会为插槽额外创建包装 DOM，样式和生命周期由插槽组件自行控制。
+- 具名插槽会收到 `{ id, location }` 作为作用域参数。
 
-- 同一位置同时有 `adm` 和 `ads`：先请求 ADM；只有 ADM 返回空广告时才请求对应 AdSense。
-- 只有 `adm`：只请求 ADM，空广告也不回退。
-- 只有 `ads`：直接请求 AdSense。
+广告组件也通过具名插槽传入，并自行负责 SDK 加载、广告请求、空广告回退、唯一 DOM ID 和卸载清理。
 
-宿主项目需要分别加载一次 Google Publisher Tag 和 Google AdSense SDK。组件通过 `googletag.cmd` 和 `adsbygoogle` 队列请求广告，不会为每个广告位重复插入 `<script>`。
-
-ADM 和 AdSense 共用稳定的全局 class，样式由宿主项目覆盖：
-
-```css
-.article-ad-wrapper {
-  max-width: 728px;
-  height: 110px;
-  margin: 0 auto;
-}
-
-.article-ad-title {
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 20px;
-  text-align: center;
-}
-```
-
-外层使用纵向 flex 布局，广告单元自动占满标题之外的剩余高度。上例中外层为 `110px`、标题为 `20px`，广告实际高度为 `90px`。如果宿主使用 `<style scoped>`，请使用 Vue 2 的深度选择器，或将这些广告规则放到非 scoped 样式中。
-
-`adTitle` 默认为 `Advertisement`。`imageBaseUrl` 默认为 `https://www.doitme.link/`；传入新地址时，只替换文档图片中该默认前缀，其他图片 URL 保持不变。
-
+`imageBaseUrl` 默认为 `https://www.doitme.link/`；传入新地址时，只替换文档图片中该默认前缀，其他图片 URL 保持不变。
 ## articleButton 链接
 
 `style: "button"` 和 `style: "text"` 都使用 `<a>` 渲染，只改变视觉样式。resolver 接收当前节点的完整只读属性：
@@ -257,9 +252,7 @@ function handleArticleButtonClick(payload: ArticleButtonClickPayload): void {
 | `document` | `unknown` | 必填 | Article Content Protocol 文档 |
 | `protocolVersion` | `number` | `1` | 协议适配器版本 |
 | `strict` | `boolean` | `false` | 校验失败时是否停止整篇正文渲染 |
-| `adConf` | `AdConfig` | `{ adm: [], ads: [], loc: [] }` | 广告配置；非空广告数组长度须与 `loc` 一致 |
-| `pubid` | `PubId` | `{ adm: '', ads: '' }` | ADM/AdSense 发布标识 |
-| `adTitle` | `string` | `"Advertisement"` | ADM 和 AdSense 共用的广告标题 |
+| `customSlots` | `CustomSlot[]` | `[]` | 配置一个或多个具名插槽的顶层正文插入位置 |
 | `imageBaseUrl` | `string` | `"https://www.doitme.link/"` | 替换文档图片的默认地址前缀 |
 | `resolveArticleButtonLink` | `ResolveArticleButtonLink` | `undefined` | 由使用者生成 articleButton 完整链接 |
 

@@ -5,15 +5,9 @@ export type ImageAlign = 'left' | 'center' | 'right'
 export type ArticleButtonStyle = 'text' | 'button'
 export type LinkTarget = '_blank' | '_self'
 
-export interface AdConfig {
-  adm?: readonly unknown[]
-  ads?: readonly unknown[]
-  loc: readonly number[]
-}
-
-export interface PubId {
-  adm: string
-  ads: string
+export interface CustomSlot {
+  id: string
+  location: number
 }
 
 export interface BoldMark {
@@ -205,7 +199,6 @@ export type RenderIssueCode =
   | 'UNSAFE_URL'
   | 'LINK_RESOLUTION_FAILED'
   | 'UNSUPPORTED_PROTOCOL'
-  | 'AD_CONFIG_LENGTH_MISMATCH'
 
 export interface RenderIssue {
   code: RenderIssueCode

@@ -7,6 +7,7 @@ import {
   type ArticleButtonLink,
   type ArticleButtonNode,
   type ArticleDocument,
+  type CustomSlot,
   type RenderIssue,
 } from '../src'
 
@@ -241,6 +242,9 @@ export default Vue.extend({
   data() {
     return {
       article,
+      customSlots: [
+        { id: 'demo-promo', location: 5 },
+      ] as CustomSlot[],
       strict: false,
       allowNavigation: false,
       openInNewTab: false,
@@ -437,10 +441,15 @@ export default Vue.extend({
           <ArticleContentRenderer
             :document="article"
             :strict="strict"
+            :custom-slots="customSlots"
             :resolve-article-button-link="resolveArticleButtonLink"
             @article-button-click="handleArticleButtonClick"
             @render-error="handleRenderError"
-          />
+          >
+            <template #demo-promo>
+              <aside class="demo-custom-slot">Custom slot before item 5</aside>
+            </template>
+          </ArticleContentRenderer>
         </article>
 
         <details class="demo-json">

@@ -8,10 +8,8 @@ import type {
   RenderIssue,
   TextAlign,
 } from '../../types.js'
-import { AdManagerAd } from '../../components/AdManagerAd.js'
-import { AdSenseAd } from '../../components/AdSenseAd.js'
 import { replaceImageBaseUrl, sanitizeUrl, secureRel } from '../../core/url.js'
-import type { AdSlot, RenderContext } from '../types.js'
+import type { RenderContext, ResolvedCustomSlot } from '../types.js'
 
 type UnknownRecord = Record<string, unknown>
 type RenderedChild = VNode | string
@@ -443,61 +441,18 @@ function renderBlockContent(value: unknown, path: string, context: RenderContext
     .filter((child): child is Exclude<RenderedChild, null> => child !== null)
 }
 
-function adDataAttribute(value: unknown): string | number | undefined {
-  return typeof value === 'string' || typeof value === 'number' ? value : undefined
-}
-
-function renderAdSlot(slot: AdSlot, context: RenderContext): VNode {
-  const admSlotId = adDataAttribute(slot.adm)
-  const adsSlotId = adDataAttribute(slot.ads)
-  const renderedAd =
-    admSlotId !== undefined && context.admPublisherId
-      ? context.createElement(AdManagerAd, {
-          key: `adm:${slot.index}:${String(admSlotId)}`,
-          props: {
-            publisherId: context.admPublisherId,
-            slotId: admSlotId,
-            title: context.adTitle,
-            fallbackPublisherId:
-              adsSlotId !== undefined ? context.adsPublisherId : undefined,
-            fallbackSlotId: adsSlotId,
-          },
-        })
-      : adsSlotId !== undefined && context.adsPublisherId
-        ? context.createElement(AdSenseAd, {
-            key: `ads:${slot.index}:${String(adsSlotId)}`,
-            props: {
-              publisherId: context.adsPublisherId,
-              slotId: adsSlotId,
-              title: context.adTitle,
-            },
-          })
-        : null
-
-  return context.createElement(
-    'div',
-    {
-      key: `/adConf/${slot.index}`,
-      staticClass: 'acp-ad-slot',
-      attrs: {
-        'data-node-type': 'adSlot',
-        'data-ad-slot': 'true',
-        'data-ad-index': slot.index,
-        'data-ad-location': slot.location,
-        'data-adm': admSlotId,
-        'data-ads': adsSlotId,
-      },
-    },
-    renderedAd ? [renderedAd] : [],
-  )
-}
-
 function renderDocumentContent(document: UnknownRecord, context: RenderContext): VNode[] {
   const content = arrayValue(document.content)
-  const slotsByLocation = new Map<number, AdSlot[]>()
+  const slotsByLocation = new Map<number, ResolvedCustomSlot[]>()
 
-  context.adSlots.forEach((slot) => {
-    if (slot.location > content.length) return
+  context.customSlots.forEach((slot) => {
+    if (
+      !Number.isInteger(slot.location) ||
+      slot.location < 1 ||
+      slot.location > content.length
+    ) {
+      return
+    }
     const slots = slotsByLocation.get(slot.location) ?? []
     slots.push(slot)
     slotsByLocation.set(slot.location, slots)
@@ -506,7 +461,7 @@ function renderDocumentContent(document: UnknownRecord, context: RenderContext):
   const rendered: VNode[] = []
   content.forEach((node, index) => {
     const location = index + 1
-    slotsByLocation.get(location)?.forEach((slot) => rendered.push(renderAdSlot(slot, context)))
+    slotsByLocation.get(location)?.forEach((slot) => rendered.push(...slot.content))
     const child = renderBlock(node, childPath('/content', index), context)
     if (child && typeof child !== 'string') rendered.push(child)
   })

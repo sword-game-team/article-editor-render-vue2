@@ -8,21 +8,17 @@ import type {
 
 export interface RenderContext {
   createElement: CreateElement
-  adSlots: readonly AdSlot[]
-  admPublisherId: string
-  adsPublisherId: string
-  adTitle: string
+  customSlots: readonly ResolvedCustomSlot[]
   imageBaseUrl: string
   resolveArticleButtonLink?: ResolveArticleButtonLink
   emitArticleButtonClick: (payload: ArticleButtonClickPayload) => void
   reportIssue: (issue: RenderIssue) => void
 }
 
-export interface AdSlot {
-  index: number
+export interface ResolvedCustomSlot {
+  id: string
   location: number
-  adm: unknown
-  ads: unknown
+  content: readonly VNode[]
 }
 
 export interface ProtocolAdapter {

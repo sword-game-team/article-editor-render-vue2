@@ -279,6 +279,77 @@ describe('ArticleContentRenderer', () => {
     expect(link.attributes('href')).not.toContain('style=')
   })
 
+  it('renders a link articleButton from its own href without calling the resolver', async () => {
+    const resolver = vi.fn(() => '/should-not-be-used')
+    const listener = vi.fn((payload: ArticleButtonClickPayload) => payload.event.preventDefault())
+    const wrapper = mount(ArticleContentRenderer, {
+      propsData: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'articleButton',
+              attrs: {
+                text: 'Protocol link',
+                style: 'link',
+                href: '/docs/article-button-link#example',
+              },
+            },
+          ],
+        },
+        resolveArticleButtonLink: resolver,
+      },
+      listeners: {
+        'article-button-click': listener,
+      },
+    })
+
+    const link = wrapper.get('.acp-article-button--link')
+    expect(link.element.tagName).toBe('A')
+    expect(link.attributes('href')).toBe('/docs/article-button-link#example')
+    expect(link.attributes('data-article-button-id')).toBeUndefined()
+    expect(resolver).not.toHaveBeenCalled()
+
+    await link.trigger('click')
+    expect(listener).toHaveBeenCalledOnce()
+    expect(listener.mock.calls[0]?.[0].attrs).toEqual({
+      text: 'Protocol link',
+      style: 'link',
+      href: '/docs/article-button-link#example',
+    })
+  })
+
+  it('disables link articleButtons with a missing or unsafe href', async () => {
+    const wrapper = mount(ArticleContentRenderer, {
+      propsData: {
+        document: {
+          type: 'doc',
+          content: [
+            { type: 'articleButton', attrs: { text: 'No href', style: 'link' } },
+            {
+              type: 'articleButton',
+              attrs: { text: 'Unsafe href', style: 'link', href: 'javascript:alert(1)' },
+            },
+          ],
+        },
+      },
+    })
+
+    await nextTick()
+    await Promise.resolve()
+    const links = wrapper.findAll('.acp-article-button--link')
+    expect(links).toHaveLength(2)
+    expect(links.at(0).attributes('href')).toBeUndefined()
+    expect(links.at(1).attributes('href')).toBeUndefined()
+    expect(links.at(0).attributes('aria-disabled')).toBe('true')
+    expect(links.at(1).attributes('aria-disabled')).toBe('true')
+    expect(wrapper.emitted('render-error')).toEqual(
+      expect.arrayContaining([
+        [expect.objectContaining({ code: 'UNSAFE_URL', path: '/content/1/attrs/href' })],
+      ]),
+    )
+  })
+
   it('skips unsafe URLs while preserving other valid content', async () => {
     const wrapper = mount(ArticleContentRenderer, {
       propsData: {

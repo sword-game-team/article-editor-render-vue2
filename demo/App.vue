@@ -185,6 +185,19 @@ const article: ArticleDocument = {
       },
     },
     {
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'link 类型直接使用协议节点中的 href，不经过 resolver：' }],
+    },
+    {
+      type: 'articleButton',
+      attrs: {
+        title: '直接使用节点 href',
+        text: 'Link 样式链接',
+        style: 'link',
+        href: '/docs/article-content-protocol#article-button-link',
+      },
+    },
+    {
       type: 'table',
       content: [
         {
@@ -346,6 +359,7 @@ export default Vue.extend({
             <code>attrs.title</code>
             <code>attrs.text</code>
             <code>attrs.style</code>
+            <code>仅处理 text/button</code>
             <code>node</code>
           </div>
 
@@ -380,7 +394,7 @@ export default Vue.extend({
 
         <label class="demo-check">
           <input v-model="openInNewTab" type="checkbox" />
-          <span>articleButton 使用 _blank</span>
+          <span>text/button 类型使用 _blank</span>
         </label>
 
         <label class="demo-check">
@@ -412,7 +426,7 @@ export default Vue.extend({
               <dd>{{ lastClick.event.defaultPrevented ? '是' : '否' }}</dd>
             </div>
           </dl>
-          <p v-else>点击正文中的按钮或文本操作后显示。</p>
+          <p v-else>点击正文中的 button、text 或 link 操作后显示。</p>
         </section>
 
         <section class="demo-runtime-card">

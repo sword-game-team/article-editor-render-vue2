@@ -10,7 +10,8 @@
 - 使用 Vue 2 `CreateElement` 和 `VNodeData`，不是 Vue 3 兼容层。
 - 支持严格模式和非严格容错渲染。
 - 拦截危险链接和图片 URL。
-- articleButton 的完整 href 由使用者回调生成。
+- articleButton 的 text/button 完整 href 由使用者回调生成。
+- articleButton 的 link 样式直接使用协议节点中的 href，不调用 resolver。
 - 支持 Vue 2 SSR。
 - 提供 TypeScript 类型、结构化错误和 CSS Variables。
 - Vue 作为 peer dependency，不会打入组件包。
@@ -173,23 +174,39 @@ export default Vue.extend({
 `imageBaseUrl` 默认为 `https://www.doitme.link/`；传入新地址时，只替换文档图片中该默认前缀，其他图片 URL 保持不变。
 ## articleButton 链接
 
-`style: "button"` 和 `style: "text"` 都使用 `<a>` 渲染，只改变视觉样式。resolver 接收当前节点的完整只读属性：
+`style: "button"`、`style: "text"` 和 `style: "link"` 都使用 `<a>` 渲染。它们的链接来源不同：
+
+- text/button：必须提供 `id`，通过 `resolveArticleButtonLink` 生成完整 `href`。
+- link：`id` 可省略，直接使用节点的 `href`，不会调用 `resolveArticleButtonLink`。
+
+对应的 TypeScript 类型是可辨识联合：
 
 ```ts
-interface ArticleButtonAttrs {
+interface ArticleButtonActionAttrs {
   id: string
   title?: string
   text: string
   style: 'text' | 'button'
+  href?: never
 }
+
+interface ArticleButtonLinkAttrs {
+  id?: string
+  title?: string
+  text: string
+  style: 'link'
+  href?: string
+}
+
+type ArticleButtonAttrs = ArticleButtonActionAttrs | ArticleButtonLinkAttrs
 ```
 
-resolver 类型：
+resolver 只处理 text/button，因此回调中的 `attrs.id` 始终是 `string`：
 
 ```ts
 type ResolveArticleButtonLink = (
-  attrs: Readonly<ArticleButtonAttrs>,
-  node: Readonly<ArticleButtonNode>,
+  attrs: Readonly<ArticleButtonActionAttrs>,
+  node: Readonly<ArticleButtonActionNode>,
 ) =>
   | string
   | {
@@ -215,6 +232,34 @@ const resolveArticleButtonLink: ResolveArticleButtonLink = (attrs) => {
 ```
 
 组件不会自动添加 `?`，也不会自动把节点属性转换成查询参数。
+
+### link 样式直接使用 href
+
+link 类型的地址完整写在协议节点中，不经过 resolver，也不会被自动改写：
+
+```ts
+const article: ArticleDocument = {
+  type: 'doc',
+  content: [
+    {
+      type: 'articleButton',
+      attrs: {
+        text: '查看协议说明',
+        style: 'link',
+        href: '/docs/article-content-protocol#article-button',
+      },
+    },
+  ],
+}
+```
+
+最终 DOM：
+
+```html
+<a href="/docs/article-content-protocol#article-button">查看协议说明</a>
+```
+
+协议允许 link 类型省略 `href`；此时会渲染不带 `href` 的禁用态 `<a>`。`javascript:`、`data:` 等不安全地址也会被拦截，并通过 `render-error` 事件报告 `UNSAFE_URL`。
 
 ### 使用闭包
 
@@ -254,7 +299,7 @@ function handleArticleButtonClick(payload: ArticleButtonClickPayload): void {
 | `strict` | `boolean` | `false` | 校验失败时是否停止整篇正文渲染 |
 | `customSlots` | `CustomSlot[]` | `[]` | 配置一个或多个具名插槽的顶层正文插入位置 |
 | `imageBaseUrl` | `string` | `"https://www.doitme.link/"` | 替换文档图片的默认地址前缀 |
-| `resolveArticleButtonLink` | `ResolveArticleButtonLink` | `undefined` | 由使用者生成 articleButton 完整链接 |
+| `resolveArticleButtonLink` | `ResolveArticleButtonLink` | `undefined` | 为 text/button 生成完整链接；link 类型不调用 |
 
 ## Events
 
@@ -269,7 +314,7 @@ interface ArticleButtonClickPayload {
 }
 ```
 
-事件在原生跳转前同步触发。调用 `payload.event.preventDefault()` 可以由 Vue Router 3 接管跳转。
+三种样式都会在原生跳转前同步触发事件。调用 `payload.event.preventDefault()` 可以由 Vue Router 3 接管跳转。
 
 ### render-error
 

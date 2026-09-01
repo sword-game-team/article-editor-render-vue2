@@ -1,15 +1,33 @@
 <script lang="ts">
-import Vue, { type CreateElement, type PropType, type VNode } from 'vue'
+import Vue, {
+  type CreateElement,
+  type FunctionalComponentOptions,
+  type PropType,
+  type RenderContext,
+  type VNode,
+} from 'vue'
 import { DEFAULT_IMAGE_BASE_URL } from '../core/url.js'
-import { CURRENT_PROTOCOL_VERSION, getProtocolAdapter, validateArticleDocument } from '../protocols/registry.js'
+import {
+  CURRENT_PROTOCOL_VERSION,
+  getProtocolAdapter,
+  validateArticleDocument,
+} from '../protocols/registry.js'
 import type { ResolvedCustomSlot } from '../protocols/types.js'
 import type {
   ArticleButtonClickPayload,
   CustomSlot,
   RenderIssue,
   ResolveArticleButtonLink,
-  ValidationResult,
 } from '../types.js'
+
+interface ArticleContentRendererProps {
+  document: unknown
+  protocolVersion: number
+  strict: boolean
+  customSlots: CustomSlot[]
+  imageBaseUrl: string
+  resolveArticleButtonLink?: ResolveArticleButtonLink
+}
 
 function createEmptyCustomSlots(): CustomSlot[] {
   return []
@@ -19,8 +37,79 @@ function issueKey(issue: RenderIssue): string {
   return `${issue.code}:${issue.path}:${issue.message}`
 }
 
-export default Vue.extend({
+function resolveCustomSlots(
+  context: RenderContext<ArticleContentRendererProps>,
+): ResolvedCustomSlot[] {
+  const slots = context.slots()
+
+  return context.props.customSlots.map((slot) => {
+    const slotScope = { id: slot.id, location: slot.location }
+    const content = context.scopedSlots[slot.id]?.(slotScope) ?? slots[slot.id] ?? []
+    return { ...slot, content }
+  })
+}
+
+function emitListener(listener: Function | Function[] | undefined, payload: unknown): void {
+  if (Array.isArray(listener)) {
+    listener.forEach((handler) => handler(payload))
+  } else {
+    listener?.(payload)
+  }
+}
+
+const RenderIssueReporter = Vue.extend({
+  name: 'ArticleContentRenderIssueReporter',
+  props: {
+    issues: {
+      type: Array as PropType<RenderIssue[]>,
+      required: true,
+    },
+  },
+  data(): { reportedFingerprint: string } {
+    return {
+      reportedFingerprint: '',
+    }
+  },
+  watch: {
+    issues: {
+      immediate: true,
+      deep: true,
+      handler(issues: RenderIssue[]): void {
+        const fingerprint = issues.map(issueKey).join('|')
+        if (fingerprint === this.reportedFingerprint) return
+        this.reportedFingerprint = fingerprint
+        this.$nextTick(() => issues.forEach((issue) => this.$emit('render-error', issue)))
+      },
+    },
+  },
+  render(createElement: CreateElement): VNode {
+    return this.$slots.default?.[0] ?? createElement()
+  },
+})
+
+function attachIssueReporter(
+  createElement: CreateElement,
+  context: RenderContext<ArticleContentRendererProps>,
+  children: VNode[],
+  issues: RenderIssue[],
+): VNode | VNode[] {
+  const firstChild = children[0] ?? createElement()
+  const renderErrorListener = context.listeners['render-error']
+  const reporter = createElement(
+    RenderIssueReporter,
+    {
+      props: { issues },
+      on: renderErrorListener ? { 'render-error': renderErrorListener } : undefined,
+    },
+    [firstChild],
+  )
+
+  return children.length > 1 ? [reporter, ...children.slice(1)] : reporter
+}
+
+const ArticleContentRenderer = {
   name: 'ArticleContentRenderer',
+  functional: true,
   props: {
     document: {
       type: null as unknown as PropType<unknown>,
@@ -47,59 +136,16 @@ export default Vue.extend({
       default: undefined,
     },
   },
-  data() {
-    return {
-      reportedRuntimeIssues: new Set<string>(),
-    }
-  },
-  computed: {
-    validation(): ValidationResult {
-      return validateArticleDocument(this.document, { protocolVersion: this.protocolVersion })
-    },
-  },
-  watch: {
-    validation: {
-      immediate: true,
-      deep: true,
-      handler(result: ValidationResult): void {
-        result.issues.forEach((issue) => this.$emit('render-error', issue))
-      },
-    },
-    document: {
-      deep: true,
-      handler(): void {
-        this.reportedRuntimeIssues.clear()
-      },
-    },
-    protocolVersion(): void {
-      this.reportedRuntimeIssues.clear()
-    },
-    resolveArticleButtonLink(): void {
-      this.reportedRuntimeIssues.clear()
-    },
-    imageBaseUrl(): void {
-      this.reportedRuntimeIssues.clear()
-    },
-  },
-  methods: {
-    resolveCustomSlots(): ResolvedCustomSlot[] {
-      return this.customSlots.map((slot) => {
-        const slotScope = { id: slot.id, location: slot.location }
-        const content = this.$scopedSlots[slot.id]?.(slotScope) ?? this.$slots[slot.id] ?? []
-        return { ...slot, content }
-      })
-    },
-    reportRuntimeIssue(issue: RenderIssue): void {
-      const key = issueKey(issue)
-      if (this.reportedRuntimeIssues.has(key)) return
-      this.reportedRuntimeIssues.add(key)
-      this.$nextTick(() => this.$emit('render-error', issue))
-    },
-  },
-  render(createElement: CreateElement): VNode {
-    const adapter = getProtocolAdapter(this.protocolVersion)
-    if (!adapter || (this.strict && !this.validation.valid)) {
-      return createElement(
+  render(createElement, context): VNode | VNode[] {
+    const { props } = context
+    const validation = validateArticleDocument(props.document, {
+      protocolVersion: props.protocolVersion,
+    })
+    const adapter = getProtocolAdapter(props.protocolVersion)
+    const runtimeIssues: RenderIssue[] = []
+
+    if (!adapter || (props.strict && !validation.valid)) {
+      const errorNode = createElement(
         'div',
         {
           class: 'acp-render-error',
@@ -110,31 +156,30 @@ export default Vue.extend({
         },
         'Invalid article content',
       )
+      return attachIssueReporter(createElement, context, [errorNode], validation.issues)
     }
 
-    const children = adapter.render(this.document, {
+    const children = adapter.render(props.document, {
       createElement,
-      customSlots: this.resolveCustomSlots(),
-      imageBaseUrl: this.imageBaseUrl,
-      resolveArticleButtonLink: this.resolveArticleButtonLink,
+      customSlots: resolveCustomSlots(context),
+      imageBaseUrl: props.imageBaseUrl,
+      resolveArticleButtonLink: props.resolveArticleButtonLink,
       emitArticleButtonClick: (payload: ArticleButtonClickPayload) =>
-        this.$emit('article-button-click', payload),
-      reportIssue: this.reportRuntimeIssue,
+        emitListener(context.listeners['article-button-click'], payload),
+      reportIssue: (issue) => runtimeIssues.push(issue),
     })
 
-    return createElement(
-      'div',
-      {
-        class: 'acp-document',
-        attrs: {
-          'data-node-type': 'doc',
-          'data-protocol-version': this.protocolVersion,
-        },
-      },
-      children,
-    )
+    return attachIssueReporter(createElement, context, children, [
+      ...validation.issues,
+      ...runtimeIssues.filter(
+        (issue, index, allIssues) =>
+          allIssues.findIndex((candidate) => issueKey(candidate) === issueKey(issue)) === index,
+      ),
+    ])
   },
-})
+} satisfies FunctionalComponentOptions<ArticleContentRendererProps>
+
+export default Vue.extend(ArticleContentRenderer)
 </script>
 
 <style src="../styles.css"></style>

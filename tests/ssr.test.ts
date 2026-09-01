@@ -7,38 +7,43 @@ describe('server-side rendering', () => {
   it('renders protocol content without browser globals', async () => {
     const app = new Vue({
       render: (createElement) =>
-        createElement(ArticleContentRenderer, {
-          props: {
-            document: {
-              type: 'doc',
-              content: [
-                {
-                  type: 'heading',
-                  attrs: { level: 1 },
-                  content: [{ type: 'text', text: 'Vue 2 SSR' }],
-                },
-                {
-                  type: 'paragraph',
-                  content: [{ type: 'text', text: 'Ready' }],
-                },
+        createElement('main', { attrs: { 'data-ssr-host': 'true' } }, [
+          createElement(ArticleContentRenderer, {
+            props: {
+              document: {
+                type: 'doc',
+                content: [
+                  {
+                    type: 'heading',
+                    attrs: { level: 1 },
+                    content: [{ type: 'text', text: 'Vue 2 SSR' }],
+                  },
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: 'Ready' }],
+                  },
+                ],
+              },
+              customSlots: [{ id: 'ssr-slot', location: 1 }],
+            },
+            scopedSlots: {
+              'ssr-slot': () => [
+                createElement(
+                  'aside',
+                  { attrs: { 'data-custom-slot': 'ssr-slot' } },
+                  'SSR custom slot',
+                ),
               ],
             },
-            customSlots: [{ id: 'ssr-slot', location: 1 }],
-          },
-          scopedSlots: {
-            'ssr-slot': () => [
-              createElement(
-                'aside',
-                { attrs: { 'data-custom-slot': 'ssr-slot' } },
-                'SSR custom slot',
-              ),
-            ],
-          },
-        }),
+          }),
+        ]),
     })
 
     const html = await createRenderer().renderToString(app)
-    expect(html).toContain('data-node-type="doc"')
+    expect(html).toContain('data-ssr-host="true"')
+    expect(html).not.toContain('data-node-type="doc"')
+    expect(html).not.toContain('data-protocol-version')
+    expect(html).not.toContain('acp-document')
     expect(html).toContain('data-custom-slot="ssr-slot"')
     expect(html).toContain('SSR custom slot')
     expect(html).toContain('<h1')

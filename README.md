@@ -338,23 +338,18 @@ interface RenderIssue {
 
 普通链接和 articleButton 允许 `http:`、`https:`、`mailto:`、`tel:`、相对路径和页面锚点。图片允许 `http:`、`https:`、`blob:` 和相对路径。危险协议会被拦截。
 
-## Vue 2 根节点说明
+## Vue 2 顶层渲染结构
 
-Vue 2 状态组件要求单一根节点，因此该版本会输出：
+组件使用 Vue 2 函数式多根渲染，正文节点会直接进入使用方已有的容器，不会额外输出 `.acp-document`、`data-node-type="doc"` 或 `data-protocol-version`：
 
 ```html
-<div class="acp-document" data-node-type="doc">...</div>
+<article class="article-content">
+  <h1 class="acp-heading">...</h1>
+  <p class="acp-paragraph">...</p>
+</article>
 ```
 
-默认样式为：
-
-```css
-.acp-document {
-  display: contents;
-}
-```
-
-它不会增加额外布局盒。Vue 3 版本使用 Fragment，不需要此兼容根节点。
+Vue 2 应用本身仍要求单一根节点。因此，不要把包含多个正文节点的 `ArticleContentRenderer` 直接作为整个 Vue 实例 render 函数的唯一根；请像上例一样放入页面已有的 `<main>`、`<article>` 或其他业务容器中。这个容器由使用方控制，不属于组件输出。
 
 ## 样式覆盖
 

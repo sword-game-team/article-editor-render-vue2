@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import Vue, { nextTick, type CreateElement, type VNodeData } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import ArticleContentRenderer, {
   type ArticleButtonClickPayload,
@@ -9,6 +9,43 @@ import ArticleContentRenderer, {
   type ArticleDocument,
   type RenderIssue,
 } from '../src'
+
+interface RendererMountOptions {
+  propsData: Record<string, unknown>
+  listeners?: NonNullable<VNodeData['on']>
+  scopedSlots?: (createElement: CreateElement) => NonNullable<VNodeData['scopedSlots']>
+}
+
+function mountRenderer(options: RendererMountOptions) {
+  const state = Vue.observable({
+    rendererProps: { ...options.propsData },
+    revision: 0,
+  })
+  const Host = Vue.extend({
+    name: 'ArticleContentRendererTestHost',
+    render(createElement) {
+      void state.revision
+      return createElement('div', { attrs: { 'data-renderer-host': 'true' } }, [
+        createElement(ArticleContentRenderer, {
+          props: state.rendererProps,
+          on: options.listeners,
+          scopedSlots: options.scopedSlots?.(createElement),
+        }),
+      ])
+    },
+  })
+  const wrapper = mount(Host)
+
+  return Object.assign(wrapper, {
+    async setRendererProps(nextProps: Record<string, unknown>): Promise<void> {
+      Object.entries(nextProps).forEach(([key, value]) =>
+        Vue.set(state.rendererProps, key, value),
+      )
+      state.revision += 1
+      await nextTick()
+    },
+  })
+}
 
 const completeDocument: ArticleDocument = {
   type: 'doc',
@@ -101,7 +138,7 @@ const completeDocument: ArticleDocument = {
 
 describe('ArticleContentRenderer', () => {
   it('inserts multiple named custom slots before one-based document positions', () => {
-    const wrapper = mount(ArticleContentRenderer, {
+    const wrapper = mountRenderer({
       propsData: {
         document: {
           type: 'doc',
@@ -117,21 +154,28 @@ describe('ArticleContentRenderer', () => {
           { id: 'secondAd', location: 3 },
         ],
       },
-      scopedSlots: {
-        promo: '<aside data-custom-slot="promo">Promo</aside>',
-        firstAd: '<div data-custom-slot="first-ad">First ad</div>',
-        secondAd: '<div data-custom-slot="second-ad">Second ad</div>',
-      },
+      scopedSlots: (createElement) => ({
+        promo: () => [createElement('aside', { attrs: { 'data-custom-slot': 'promo' } }, 'Promo')],
+        firstAd: () => [
+          createElement('div', { attrs: { 'data-custom-slot': 'first-ad' } }, 'First ad'),
+        ],
+        secondAd: () => [
+          createElement('div', { attrs: { 'data-custom-slot': 'second-ad' } }, 'Second ad'),
+        ],
+      }),
     })
 
     const children = Array.from(wrapper.element.children)
     expect(
       children.map((element) => element.getAttribute('data-custom-slot') ?? element.textContent),
     ).toEqual(['First', 'promo', 'first-ad', 'Second', 'second-ad', 'Third'])
+    expect(wrapper.find('.acp-document').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain('data-node-type="doc"')
+    expect(wrapper.html()).not.toContain('data-protocol-version')
   })
 
   it('ignores invalid or out-of-range custom slot locations', () => {
-    const wrapper = mount(ArticleContentRenderer, {
+    const wrapper = mountRenderer({
       propsData: {
         document: {
           type: 'doc',
@@ -143,11 +187,11 @@ describe('ArticleContentRenderer', () => {
           { id: 'missing', location: 2 },
         ],
       },
-      scopedSlots: {
-        zero: '<div data-custom-slot="zero" />',
-        fraction: '<div data-custom-slot="fraction" />',
-        missing: '<div data-custom-slot="missing" />',
-      },
+      scopedSlots: (createElement) => ({
+        zero: () => [createElement('div', { attrs: { 'data-custom-slot': 'zero' } })],
+        fraction: () => [createElement('div', { attrs: { 'data-custom-slot': 'fraction' } })],
+        missing: () => [createElement('div', { attrs: { 'data-custom-slot': 'missing' } })],
+      }),
     })
 
     expect(wrapper.find('[data-custom-slot]').exists()).toBe(false)
@@ -161,14 +205,14 @@ describe('ArticleContentRenderer', () => {
         { type: 'image', attrs: { src: 'https://external.example.com/image.png' } },
       ],
     }
-    const wrapper = mount(ArticleContentRenderer, {
+    const wrapper = mountRenderer({
       propsData: { document },
     })
 
     expect(wrapper.findAll('img').at(0).attributes('src')).toBe(
       'https://www.doitme.link/uploads/article.png',
     )
-    await wrapper.setProps({ imageBaseUrl: 'https://cdn.example.com/assets/' })
+    await wrapper.setRendererProps({ imageBaseUrl: 'https://cdn.example.com/assets/' })
     expect(wrapper.findAll('img').at(0).attributes('src')).toBe(
       'https://cdn.example.com/assets/uploads/article.png',
     )
@@ -178,7 +222,7 @@ describe('ArticleContentRenderer', () => {
   })
 
   it('renders every v1 node family and nested marks as semantic elements', () => {
-    const wrapper = mount(ArticleContentRenderer, {
+    const wrapper = mountRenderer({
       propsData: {
         document: completeDocument,
         resolveArticleButtonLink: (attrs: { id: string }) => `/actions/${attrs.id}`,
@@ -218,7 +262,7 @@ describe('ArticleContentRenderer', () => {
         : `/actions/${attrs.id}`,
     )
     const listener = vi.fn((payload: ArticleButtonClickPayload) => payload.event.preventDefault())
-    const wrapper = mount(ArticleContentRenderer, {
+    const wrapper = mountRenderer({
       propsData: {
         document: completeDocument,
         resolveArticleButtonLink: resolver,
@@ -252,7 +296,7 @@ describe('ArticleContentRenderer', () => {
 
   it('uses the exact safe href returned by the consumer without appending parameters', () => {
     const resolver = vi.fn((attrs: { id: string }) => `/detail/${attrs.id}`)
-    const wrapper = mount(ArticleContentRenderer, {
+    const wrapper = mountRenderer({
       propsData: {
         document: {
           type: 'doc',
@@ -282,7 +326,7 @@ describe('ArticleContentRenderer', () => {
   it('renders a link articleButton from its own href without calling the resolver', async () => {
     const resolver = vi.fn(() => '/should-not-be-used')
     const listener = vi.fn((payload: ArticleButtonClickPayload) => payload.event.preventDefault())
-    const wrapper = mount(ArticleContentRenderer, {
+    const wrapper = mountRenderer({
       propsData: {
         document: {
           type: 'doc',
@@ -320,7 +364,8 @@ describe('ArticleContentRenderer', () => {
   })
 
   it('disables link articleButtons with a missing or unsafe href', async () => {
-    const wrapper = mount(ArticleContentRenderer, {
+    const renderError = vi.fn<(issue: RenderIssue) => void>()
+    const wrapper = mountRenderer({
       propsData: {
         document: {
           type: 'doc',
@@ -333,6 +378,9 @@ describe('ArticleContentRenderer', () => {
           ],
         },
       },
+      listeners: {
+        'render-error': renderError,
+      },
     })
 
     await nextTick()
@@ -343,15 +391,14 @@ describe('ArticleContentRenderer', () => {
     expect(links.at(1).attributes('href')).toBeUndefined()
     expect(links.at(0).attributes('aria-disabled')).toBe('true')
     expect(links.at(1).attributes('aria-disabled')).toBe('true')
-    expect(wrapper.emitted('render-error')).toEqual(
-      expect.arrayContaining([
-        [expect.objectContaining({ code: 'UNSAFE_URL', path: '/content/1/attrs/href' })],
-      ]),
+    expect(renderError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'UNSAFE_URL', path: '/content/1/attrs/href' }),
     )
   })
 
   it('skips unsafe URLs while preserving other valid content', async () => {
-    const wrapper = mount(ArticleContentRenderer, {
+    const renderError = vi.fn<(issue: RenderIssue) => void>()
+    const wrapper = mountRenderer({
       propsData: {
         document: {
           type: 'doc',
@@ -375,6 +422,9 @@ describe('ArticleContentRenderer', () => {
         },
         resolveArticleButtonLink: () => 'javascript:alert(1)',
       },
+      listeners: {
+        'render-error': renderError,
+      },
     })
 
     await nextTick()
@@ -384,8 +434,8 @@ describe('ArticleContentRenderer', () => {
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.find('.acp-article-button').attributes('href')).toBeUndefined()
     expect(
-      (wrapper.emitted('render-error') ?? []).some(([issue]) =>
-        ['UNSAFE_URL', 'LINK_RESOLUTION_FAILED'].includes((issue as { code: string }).code),
+      renderError.mock.calls.some(([issue]) =>
+        ['UNSAFE_URL', 'LINK_RESOLUTION_FAILED'].includes(issue.code),
       ),
     ).toBe(true)
   })
@@ -398,17 +448,24 @@ describe('ArticleContentRenderer', () => {
         { type: 'paragraph', content: [{ type: 'text', text: 'Still visible' }] },
       ],
     }
-    const strictWrapper = mount(ArticleContentRenderer, { propsData: { document, strict: true } })
-    const tolerantWrapper = mount(ArticleContentRenderer, { propsData: { document } })
+    const strictError = vi.fn<(issue: RenderIssue) => void>()
+    const tolerantError = vi.fn<(issue: RenderIssue) => void>()
+    const strictWrapper = mountRenderer({
+      propsData: { document, strict: true },
+      listeners: { 'render-error': strictError },
+    })
+    const tolerantWrapper = mountRenderer({
+      propsData: { document },
+      listeners: { 'render-error': tolerantError },
+    })
 
     await nextTick()
     expect(strictWrapper.find('[data-render-error="true"]').exists()).toBe(true)
     expect(strictWrapper.text()).toContain('Invalid article content')
     expect(tolerantWrapper.text()).toContain('Still visible')
     expect(tolerantWrapper.text()).not.toContain('unknown')
-    expect(tolerantWrapper.emitted('render-error')?.[0]?.[0]).toMatchObject({
-      code: 'UNKNOWN_NODE',
-      path: '/content/0/type',
-    })
+    expect(tolerantError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'UNKNOWN_NODE', path: '/content/0/type' }),
+    )
   })
 })

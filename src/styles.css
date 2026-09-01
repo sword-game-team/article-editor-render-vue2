@@ -11,10 +11,6 @@
   --acp-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
-.acp-document {
-  display: contents;
-}
-
 .acp-paragraph,
 .acp-heading,
 .acp-blockquote,

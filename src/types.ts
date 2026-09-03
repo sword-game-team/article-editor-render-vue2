@@ -30,13 +30,33 @@ export interface CodeMark {
   type: 'code'
 }
 
-export interface LinkMark {
-  type: 'link'
-  attrs: {
-    href: string
-    target?: LinkTarget
-  }
+export interface HrefLinkMarkAttrs {
+  type?: 'href'
+  href: string
+  id?: never
+  title?: never
+  target?: LinkTarget
 }
+
+export interface CustomLinkMarkAttrs {
+  type: 'custom'
+  id: string
+  title: string
+  href?: never
+  target?: LinkTarget
+}
+
+export interface HrefLinkMark {
+  type: 'link'
+  attrs: HrefLinkMarkAttrs
+}
+
+export interface CustomLinkMark {
+  type: 'link'
+  attrs: CustomLinkMarkAttrs
+}
+
+export type LinkMark = HrefLinkMark | CustomLinkMark
 
 export type ArticleMark =
   | BoldMark
@@ -204,6 +224,19 @@ export type ResolveArticleButtonLink = (
   attrs: Readonly<ArticleButtonActionAttrs>,
   node: Readonly<ArticleButtonActionNode>,
 ) => ArticleButtonLink
+
+export interface CustomLinkDescriptor {
+  href: string
+  target?: LinkTarget
+  rel?: string
+}
+
+export type CustomLink = string | CustomLinkDescriptor | null
+
+export type ResolveCustomLink = (
+  attrs: Readonly<CustomLinkMarkAttrs>,
+  mark: Readonly<CustomLinkMark>,
+) => CustomLink
 
 export type RenderIssueCode =
   | 'INVALID_ROOT'

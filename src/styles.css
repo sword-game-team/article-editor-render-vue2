@@ -122,6 +122,11 @@
   color: var(--acp-color-accent-hover);
 }
 
+.acp-link--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .acp-article-button {
   display: inline-flex;
   align-items: center;

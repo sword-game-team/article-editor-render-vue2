@@ -3,6 +3,7 @@ import type {
   ArticleButtonClickPayload,
   RenderIssue,
   ResolveArticleButtonLink,
+  ResolveCustomLink,
   ValidationResult,
 } from '../types.js'
 
@@ -11,6 +12,7 @@ export interface RenderContext {
   customSlots: readonly ResolvedCustomSlot[]
   imageBaseUrl: string
   resolveArticleButtonLink?: ResolveArticleButtonLink
+  resolveCustomLink?: ResolveCustomLink
   emitArticleButtonClick: (payload: ArticleButtonClickPayload) => void
   reportIssue: (issue: RenderIssue) => void
 }

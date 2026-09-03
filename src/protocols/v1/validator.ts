@@ -339,8 +339,66 @@ class ProtocolV1Validator {
     this.checkProperties(value, path, ['type', 'attrs'], ['type', 'attrs'], 'link')
     const attrs = this.requireRecord(value.attrs, childPath(path, 'attrs'), 'link')
     if (!attrs) return
-    this.checkProperties(attrs, childPath(path, 'attrs'), ['href', 'target'], ['href'], 'link')
-    this.requireString(attrs.href, nestedPath(path, 'attrs', 'href'), 'link')
+    this.checkProperties(
+      attrs,
+      childPath(path, 'attrs'),
+      ['type', 'href', 'id', 'title', 'target'],
+      [],
+      'link',
+    )
+    if (attrs.type !== undefined && attrs.type !== 'href' && attrs.type !== 'custom') {
+      this.add(
+        'INVALID_VALUE',
+        nestedPath(path, 'attrs', 'type'),
+        'Link type must be "href" or "custom".',
+        'link',
+      )
+    }
+
+    const linkType = attrs.type ?? 'href'
+    if (linkType === 'custom') {
+      for (const field of ['id', 'title'] as const) {
+        if (!(field in attrs)) {
+          this.add(
+            'MISSING_PROPERTY',
+            nestedPath(path, 'attrs', field),
+            `Required property "${field}" is missing for a custom link.`,
+            'link',
+          )
+        } else {
+          this.requireString(attrs[field], nestedPath(path, 'attrs', field), 'link')
+        }
+      }
+      if (attrs.href !== undefined) {
+        this.add(
+          'INVALID_VALUE',
+          nestedPath(path, 'attrs', 'href'),
+          'A custom link must not contain href.',
+          'link',
+        )
+      }
+    } else if (linkType === 'href') {
+      if (!('href' in attrs)) {
+        this.add(
+          'MISSING_PROPERTY',
+          nestedPath(path, 'attrs', 'href'),
+          'Required property "href" is missing for an href link.',
+          'link',
+        )
+      } else {
+        this.requireString(attrs.href, nestedPath(path, 'attrs', 'href'), 'link')
+      }
+      for (const field of ['id', 'title'] as const) {
+        if (attrs[field] !== undefined) {
+          this.add(
+            'INVALID_VALUE',
+            nestedPath(path, 'attrs', field),
+            `An href link must not contain ${field}.`,
+            'link',
+          )
+        }
+      }
+    }
     if (attrs.target !== undefined && attrs.target !== '_blank' && attrs.target !== '_self') {
       this.add(
         'INVALID_VALUE',

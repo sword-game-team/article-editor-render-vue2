@@ -252,7 +252,106 @@ describe('ArticleContentRenderer', () => {
       href: '/relative',
       target: '_blank',
       rel: 'noopener noreferrer',
+      'data-link-type': 'href',
     })
+  })
+
+  it('uses the consumer resolver only for custom link marks', () => {
+    const resolveCustomLink = vi.fn((attrs: { id: string; title: string }, _mark: unknown) =>
+      `/detail/${encodeURIComponent(attrs.id)}/${encodeURIComponent(attrs.title)}`,
+    )
+    const wrapper = mountRenderer({
+      propsData: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Custom link',
+                  marks: [
+                    {
+                      type: 'link',
+                      attrs: {
+                        type: 'custom',
+                        id: 'article-42',
+                        title: 'Read details',
+                        target: '_self',
+                      },
+                    },
+                  ],
+                },
+                { type: 'text', text: ' and ' },
+                {
+                  type: 'text',
+                  text: 'href link',
+                  marks: [{ type: 'link', attrs: { href: '/direct', target: '_self' } }],
+                },
+              ],
+            },
+          ],
+        },
+        resolveCustomLink,
+      },
+    })
+    const links = wrapper.findAll('p a')
+
+    expect(links).toHaveLength(2)
+    expect(links.at(0).attributes()).toMatchObject({
+      href: '/detail/article-42/Read%20details',
+      'data-link-type': 'custom',
+      'data-link-id': 'article-42',
+      title: 'Read details',
+      target: '_self',
+    })
+    expect(links.at(1).attributes()).toMatchObject({
+      href: '/direct',
+      'data-link-type': 'href',
+    })
+    expect(resolveCustomLink).toHaveBeenCalledOnce()
+    expect(Object.isFrozen(resolveCustomLink.mock.calls[0]?.[0])).toBe(true)
+    expect(Object.isFrozen(resolveCustomLink.mock.calls[0]?.[1])).toBe(true)
+  })
+
+  it('renders a disabled custom link and reports an unsafe resolver result', async () => {
+    const renderError = vi.fn<(issue: RenderIssue) => void>()
+    const wrapper = mountRenderer({
+      propsData: {
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Unsafe custom link',
+                  marks: [
+                    {
+                      type: 'link',
+                      attrs: { type: 'custom', id: 'unsafe', title: 'Unsafe', target: '_blank' },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        resolveCustomLink: () => 'javascript:alert(1)',
+      },
+      listeners: { 'render-error': renderError },
+    })
+
+    await nextTick()
+    await Promise.resolve()
+    const link = wrapper.get('.acp-link--custom')
+    expect(link.attributes('href')).toBeUndefined()
+    expect(link.attributes('aria-disabled')).toBe('true')
+    expect(renderError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'UNSAFE_URL', path: '/content/0/content/0/marks/0' }),
+    )
   })
 
   it('resolves both articleButton styles to safe anchors and emits click details', async () => {

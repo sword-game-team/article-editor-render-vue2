@@ -422,13 +422,36 @@
     },
     {
       "type": "link",
-      "description": "A hyperlink. Renderers must validate and escape the URL.",
+      "description": "An href or application-defined custom link.",
       "attributes": [
+        {
+          "name": "type",
+          "type": "string",
+          "required": false,
+          "description": "Link destination type. Omission means href for legacy documents.",
+          "defaultValue": "href",
+          "allowedValues": [
+            "href",
+            "custom"
+          ]
+        },
         {
           "name": "href",
           "type": "string",
-          "required": true,
-          "description": "Non-empty URI reference; fragment-only links such as # are valid."
+          "required": false,
+          "description": "Required only for href links. Renderers must validate and escape this URI reference."
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": false,
+          "description": "Application-defined identifier required only for custom links."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "description": "Application-defined title required only for custom links."
         },
         {
           "name": "target",
@@ -442,11 +465,24 @@
           ]
         }
       ],
+      "constraints": [
+        {
+          "name": "href-link-fields",
+          "description": "An href link requires href and must not contain id or title. A missing type is treated as href."
+        },
+        {
+          "name": "custom-link-fields",
+          "description": "A custom link requires type=custom, id, and title, and must not contain href."
+        }
+      ],
       "render": {
         "mode": "element",
         "element": "a",
         "attributeBindings": {
+          "type": "data-link-type",
           "href": "href",
+          "id": "data-link-id",
+          "title": "title",
           "target": "target"
         }
       }
@@ -979,25 +1015,63 @@
                 "const": "link"
               },
               "attrs": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "href",
-                  "target"
-                ],
-                "properties": {
-                  "href": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Non-empty URI reference; fragment-only links such as # are valid."
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "href",
+                      "target"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "href",
+                        "default": "href",
+                        "description": "May be omitted in legacy documents; omission means href."
+                      },
+                      "href": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Non-empty URI reference; fragment-only links such as # are valid."
+                      },
+                      "target": {
+                        "enum": [
+                          "_blank",
+                          "_self"
+                        ]
+                      }
+                    }
                   },
-                  "target": {
-                    "enum": [
-                      "_blank",
-                      "_self"
-                    ]
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "type",
+                      "id",
+                      "title",
+                      "target"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "custom"
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "target": {
+                        "enum": [
+                          "_blank",
+                          "_self"
+                        ]
+                      }
+                    }
                   }
-                }
+                ]
               }
             }
           }

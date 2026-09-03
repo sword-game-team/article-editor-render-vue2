@@ -37,7 +37,18 @@
         },
         {
           "type": "text",
-          "text": "."
+          "text": ". Custom route",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "type": "custom",
+                "id": "article-42",
+                "title": "Read article details",
+                "target": "_self"
+              }
+            }
+          ]
         }
       ]
     },

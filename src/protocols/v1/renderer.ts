@@ -3,6 +3,8 @@ import type {
   ArticleButtonAttrs,
   ArticleButtonLinkDescriptor,
   ArticleButtonNode,
+  CustomLinkMark,
+  CustomLinkMarkAttrs,
   ImageAlign,
   LinkTarget,
   RenderIssue,
@@ -121,6 +123,87 @@ function renderText(value: unknown, path: string, context: RenderContext): Rende
         break
       case 'link': {
         const attrs = recordValue(mark.attrs)
+        const target: LinkTarget = validTarget(attrs.target) ? attrs.target : '_blank'
+
+        if (attrs.type === 'custom') {
+          if (
+            typeof attrs.id !== 'string' ||
+            !attrs.id ||
+            typeof attrs.title !== 'string' ||
+            !attrs.title
+          ) {
+            break
+          }
+
+          const customAttrs = Object.freeze({
+            type: 'custom' as const,
+            id: attrs.id,
+            title: attrs.title,
+            ...(validTarget(attrs.target) ? { target: attrs.target } : {}),
+          }) as Readonly<CustomLinkMarkAttrs>
+          const customMark = Object.freeze({
+            type: 'link' as const,
+            attrs: customAttrs,
+          }) as Readonly<CustomLinkMark>
+          let resolved: ReturnType<typeof normalizeResolvedLink> = null
+
+          if (!context.resolveCustomLink) {
+            report(context, {
+              code: 'LINK_RESOLUTION_FAILED',
+              path: markPath,
+              message: 'No resolveCustomLink callback was provided for a custom link mark.',
+              nodeType: 'link',
+            })
+          } else {
+            try {
+              const result = context.resolveCustomLink(customAttrs, customMark)
+              resolved = normalizeResolvedLink(result, target)
+              if (!resolved) {
+                report(context, {
+                  code:
+                    typeof result === 'string' ||
+                    (isRecord(result) && typeof result.href === 'string')
+                      ? 'UNSAFE_URL'
+                      : 'LINK_RESOLUTION_FAILED',
+                  path: markPath,
+                  message: 'The custom link resolver returned no usable safe URL.',
+                  nodeType: 'link',
+                })
+              }
+            } catch (error) {
+              report(context, {
+                code: 'LINK_RESOLUTION_FAILED',
+                path: markPath,
+                message: `The custom link resolver threw an error: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                nodeType: 'link',
+              })
+            }
+          }
+
+          const href = resolved?.href ?? null
+          const resolvedTarget = resolved?.target ?? target
+          rendered = createVNode(
+            context,
+            'a',
+            {
+              class: `acp-link acp-link--custom${!href ? ' acp-link--disabled' : ''}`,
+              href: href ?? undefined,
+              target: resolvedTarget,
+              rel: resolved?.rel ?? secureRel(undefined, resolvedTarget),
+              title: customAttrs.title,
+              'data-link-type': 'custom',
+              'data-link-id': customAttrs.id,
+              'aria-disabled': href ? undefined : 'true',
+              onClick: href ? undefined : (event: MouseEvent) => event.preventDefault(),
+            },
+            [rendered],
+          )
+          break
+        }
+
+        if (attrs.type !== undefined && attrs.type !== 'href') break
         const href = sanitizeUrl(attrs.href, 'link')
         if (!href) {
           report(context, {
@@ -131,7 +214,6 @@ function renderText(value: unknown, path: string, context: RenderContext): Rende
           })
           break
         }
-        const target: LinkTarget = validTarget(attrs.target) ? attrs.target : '_blank'
         rendered = createVNode(context, 
           'a',
           {
@@ -139,6 +221,7 @@ function renderText(value: unknown, path: string, context: RenderContext): Rende
             href,
             target,
             rel: secureRel(undefined, target),
+            'data-link-type': 'href',
           },
           [rendered],
         )
@@ -183,8 +266,9 @@ function renderTableRow(value: unknown, path: string, context: RenderContext): R
   return createVNode(context, 'tr', { class: 'acp-table-row', 'data-node-type': 'tableRow' }, cells)
 }
 
-function normalizeArticleButtonLink(
+function normalizeResolvedLink(
   value: unknown,
+  defaultTarget: LinkTarget = '_self',
 ): { href: string; target: LinkTarget; rel?: string } | null {
   if (isRecord(value) && value.target !== undefined && !validTarget(value.target)) return null
   if (isRecord(value) && value.rel !== undefined && typeof value.rel !== 'string') return null
@@ -203,7 +287,7 @@ function normalizeArticleButtonLink(
   if (!descriptor) return null
   const href = sanitizeUrl(descriptor.href, 'link')
   if (!href) return null
-  const target = descriptor.target ?? '_self'
+  const target = descriptor.target ?? defaultTarget
 
   return {
     href,
@@ -248,10 +332,10 @@ function renderArticleButton(
       })
   const typedNode = Object.freeze({ type: 'articleButton' as const, attrs }) as Readonly<ArticleButtonNode>
 
-  let resolved: ReturnType<typeof normalizeArticleButtonLink> = null
+  let resolved: ReturnType<typeof normalizeResolvedLink> = null
   if (attrs.style === 'link') {
     if (attrs.href !== undefined) {
-      resolved = normalizeArticleButtonLink(attrs.href)
+      resolved = normalizeResolvedLink(attrs.href)
       if (!resolved) {
         report(context, {
           code: 'UNSAFE_URL',
@@ -272,7 +356,7 @@ function renderArticleButton(
     try {
       const actionNode = Object.freeze({ type: 'articleButton' as const, attrs })
       const result = context.resolveArticleButtonLink(attrs, actionNode)
-      resolved = normalizeArticleButtonLink(result)
+      resolved = normalizeResolvedLink(result)
       if (!resolved) {
         report(context, {
           code:

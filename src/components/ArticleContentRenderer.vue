@@ -18,6 +18,7 @@ import type {
   CustomSlot,
   RenderIssue,
   ResolveArticleButtonLink,
+  ResolveCustomLink,
 } from '../types.js'
 
 interface ArticleContentRendererProps {
@@ -27,6 +28,7 @@ interface ArticleContentRendererProps {
   customSlots: CustomSlot[]
   imageBaseUrl: string
   resolveArticleButtonLink?: ResolveArticleButtonLink
+  resolveCustomLink?: ResolveCustomLink
 }
 
 function createEmptyCustomSlots(): CustomSlot[] {
@@ -135,6 +137,10 @@ const ArticleContentRenderer = {
       type: Function as PropType<ResolveArticleButtonLink>,
       default: undefined,
     },
+    resolveCustomLink: {
+      type: Function as PropType<ResolveCustomLink>,
+      default: undefined,
+    },
   },
   render(createElement, context): VNode | VNode[] {
     const { props } = context
@@ -164,6 +170,7 @@ const ArticleContentRenderer = {
       customSlots: resolveCustomSlots(context),
       imageBaseUrl: props.imageBaseUrl,
       resolveArticleButtonLink: props.resolveArticleButtonLink,
+      resolveCustomLink: props.resolveCustomLink,
       emitArticleButtonClick: (payload: ArticleButtonClickPayload) =>
         emitListener(context.listeners['article-button-click'], payload),
       reportIssue: (issue) => runtimeIssues.push(issue),

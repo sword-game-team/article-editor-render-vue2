@@ -33,6 +33,68 @@ describe('validateArticleDocument', () => {
     expect(result).toEqual({ valid: true, issues: [] })
   })
 
+  it('accepts href and custom link mark variants', () => {
+    const result = validateArticleDocument({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'href',
+              marks: [{ type: 'link', attrs: { type: 'href', href: '/direct', target: '_self' } }],
+            },
+            {
+              type: 'text',
+              text: 'custom',
+              marks: [
+                {
+                  type: 'link',
+                  attrs: { type: 'custom', id: '42', title: 'Article details', target: '_blank' },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result).toEqual({ valid: true, issues: [] })
+  })
+
+  it('enforces conditional fields for link marks', () => {
+    const result = validateArticleDocument({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'invalid custom',
+              marks: [{ type: 'link', attrs: { type: 'custom', title: 'Missing id', href: '/bad' } }],
+            },
+            {
+              type: 'text',
+              text: 'invalid href',
+              marks: [{ type: 'link', attrs: { type: 'href', href: '/direct', id: 'not-allowed' } }],
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(result.valid).toBe(false)
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'MISSING_PROPERTY', path: '/content/0/content/0/marks/0/attrs/id' }),
+        expect.objectContaining({ code: 'INVALID_VALUE', path: '/content/0/content/0/marks/0/attrs/href' }),
+        expect.objectContaining({ code: 'INVALID_VALUE', path: '/content/0/content/1/marks/0/attrs/id' }),
+      ]),
+    )
+  })
+
   it('enforces content models and table column consistency', () => {
     const result = validateArticleDocument({
       type: 'doc',

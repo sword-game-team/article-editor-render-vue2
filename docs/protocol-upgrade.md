@@ -16,3 +16,7 @@ Vue 2 版本的协议逻辑应与 Vue 3 版本保持一致；仅 VNode 数据结
 ## articleButton 兼容约束
 
 `articleButton` 的 text、button、link 三种样式都使用 `<a>`。text/button 由 resolver 返回完整链接，渲染器不得自动添加 query、hash 或其他节点属性；link 直接使用节点的 `href`，不得调用 resolver。text/button 必须提供 `id`，link 的 `id` 和 `href` 均可省略。
+
+## link mark 兼容约束
+
+`type` 省略时必须按 `href` 处理，以兼容旧文档；显式 `type: "href"` 也直接读取协议中的 `href`。只有 `type: "custom"` 才调用 `resolveCustomLink(attrs, mark)`，并使用回调返回的完整安全地址。custom 类型要求 `id`、`title`，禁止包含 `href`；href 类型要求 `href`，禁止包含 `id`、`title`。两种类型都沿用 `target` 默认值 `_blank`。

@@ -10,6 +10,7 @@
 - 使用 Vue 2 `CreateElement` 和 `VNodeData`，不是 Vue 3 兼容层。
 - 支持严格模式和非严格容错渲染。
 - 拦截危险链接和图片 URL。
+- `link` mark 支持 `href` 和 `custom` 两种类型，custom 链接由使用者回调生成完整地址。
 - articleButton 的 text/button 完整 href 由使用者回调生成。
 - articleButton 的 link 样式直接使用协议节点中的 href，不调用 resolver。
 - 支持 Vue 2 SSR。
@@ -172,6 +173,116 @@ export default Vue.extend({
 广告组件也通过具名插槽传入，并自行负责 SDK 加载、广告请求、空广告回退、唯一 DOM ID 和卸载清理。
 
 `imageBaseUrl` 默认为 `https://www.doitme.link/`；传入新地址时，只替换文档图片中该默认前缀，其他图片 URL 保持不变。
+## link mark：href 与 custom
+
+协议中的 `link` mark 现在有两种链接来源：
+
+- `type` 省略或为 `"href"`：直接使用 `attrs.href`，兼容旧文档，不调用 custom resolver。
+- `type: "custom"`：协议只保存业务属性 `id`、`title` 和 `target`，通过 `resolveCustomLink` 生成最终 `href`。
+
+普通 href 链接可以继续使用旧格式：
+
+```ts
+const article: ArticleDocument = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: '直接链接',
+          marks: [
+            {
+              type: 'link',
+              attrs: { href: '/help', target: '_self' },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+```
+
+custom 链接不在协议中提供 `href`：
+
+```ts
+const article: ArticleDocument = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: '查看文章详情',
+          marks: [
+            {
+              type: 'link',
+              attrs: {
+                type: 'custom',
+                id: 'article-42',
+                title: 'memory signs',
+                target: '_self',
+              },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+```
+
+由使用者读取 `id + title` 并返回完整地址：
+
+```vue
+<script lang="ts">
+import Vue from 'vue'
+import type { ResolveCustomLink } from 'article-content-renderer-vue2'
+
+export default Vue.extend({
+  methods: {
+    resolveCustomLink: ((attrs) => {
+      return `/detail/${encodeURIComponent(attrs.id)}/${encodeURIComponent(attrs.title)}`
+    }) as ResolveCustomLink,
+  },
+})
+</script>
+
+<template>
+  <ArticleContentRenderer
+    :document="article"
+    :resolve-custom-link="resolveCustomLink"
+  />
+</template>
+```
+
+也可以返回对象来覆盖 `target` 或补充 `rel`：
+
+```ts
+const resolveCustomLink: ResolveCustomLink = (attrs) => ({
+  href: `/detail/${encodeURIComponent(attrs.id)}?title=${encodeURIComponent(attrs.title)}`,
+  target: '_blank',
+  rel: 'external',
+})
+```
+
+最终 custom DOM 会保留协议绑定属性，方便样式或事件委托：
+
+```html
+<a
+  href="/detail/article-42/memory%20signs"
+  data-link-type="custom"
+  data-link-id="article-42"
+  title="memory signs"
+  target="_self"
+>查看文章详情</a>
+```
+
+`resolveCustomLink` **只会**为 `type: "custom"` 的 link mark 调用。href 类型始终直接读取 `attrs.href`。传给回调的 `attrs` 和 `mark` 是只读、冻结的快照。回调缺失、返回 `null`、抛出异常或返回不安全 URL 时，组件渲染不带 `href` 的禁用态 `<a>`，并通过 `render-error` 报告 `LINK_RESOLUTION_FAILED` 或 `UNSAFE_URL`。
+
 ## articleButton 链接
 
 `style: "button"`、`style: "text"` 和 `style: "link"` 都使用 `<a>` 渲染。它们的链接来源不同：
@@ -300,6 +411,7 @@ function handleArticleButtonClick(payload: ArticleButtonClickPayload): void {
 | `customSlots` | `CustomSlot[]` | `[]` | 配置一个或多个具名插槽的顶层正文插入位置 |
 | `imageBaseUrl` | `string` | `"https://www.doitme.link/"` | 替换文档图片的默认地址前缀 |
 | `resolveArticleButtonLink` | `ResolveArticleButtonLink` | `undefined` | 为 text/button 生成完整链接；link 类型不调用 |
+| `resolveCustomLink` | `ResolveCustomLink` | `undefined` | 仅为 `type: "custom"` 的 link mark 生成完整安全链接 |
 
 ## Events
 

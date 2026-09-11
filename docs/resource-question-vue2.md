@@ -27,6 +27,11 @@ interface ResourceQuestionSelectEvent {
   questionId: string
   resourceId: string
   optionId: string
+  option: Readonly<{
+    id: string
+    label: string
+    targetAnchorId?: string
+  }>
   revealKey: string
   targetAnchorId?: string
 }
@@ -36,7 +41,16 @@ interface ArticleRendererRuntime {
 }
 ```
 
-事件字段读取保存快照，按稳定的选项 ID 匹配。`revealKey` 精确匹配，不要求与 `questionId` 相同。所有合法点击都发出事件，包括没有配置目标、目标已删除的选项。
+通过 `@option-select="handleOptionSelect"` 注册选项点击回调，使用 `event.option` 获取当前选项的完整属性（`id`、`label`、可选的 `targetAnchorId`）。事件及 `option` 都是冻结的只读快照副本，后续文章修改不会影响已收到的属性。事件按稳定的选项 ID 匹配，原有顶层 `optionId`、`targetAnchorId` 等字段继续保留。`revealKey` 精确匹配，不要求与 `questionId` 相同。每次合法点击都发出一次事件，包括重复点击、没有配置目标、目标已删除的选项。
+
+```ts
+handleOptionSelect(event: ResourceQuestionSelectEvent): void {
+  // 在回调内按选项属性处理业务；无需在 JSON 中配置函数。
+  console.log(event.option.id, event.option.label, event.option.targetAnchorId)
+}
+```
+
+两个 Demo 的解锁面板均会展示回调收到的 `event.option`。可复制的 Vue 2 示例见 [README](../README.md#option-select点击选项并获取属性)。
 
 Vue 2 组件继续使用函数式多根输出，不能通过组件 `ref` 获取实例方法。`renderer-ready` 在挂载时提供该实例的运行时句柄；保存后调用 `runtime.cancelPendingNavigation()`。取消仅清除定位任务，不修改宿主的解锁状态；卸载后旧句柄不会影响新实例。
 

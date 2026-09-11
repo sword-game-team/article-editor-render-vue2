@@ -35,6 +35,43 @@ beforeEach(() => {
 })
 afterEach(() => { wrappers.splice(0).forEach((w) => w.destroy()); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
+describe('option selection payload', () => {
+  it.each([undefined, 'last', 'deleted'])('returns the option attributes on every click with target %s', async (target) => {
+    const q = question('one', target)
+    q.attrs.options[0].label = '<b>Saved option</b>'
+    const result = render(freezeDeep({ type: 'doc', content: [q, paragraph('last')] }))
+    await result.wrapper.find('button').trigger('click')
+    await result.wrapper.find('button').trigger('click')
+    expect(result.selected).toHaveBeenCalledTimes(2)
+    const event: ResourceQuestionSelectEvent = result.selected.mock.lastCall![0]
+    expect(event.option).toEqual(q.attrs.options[0])
+    expect(event.option.id).toBe(event.optionId)
+    expect(event.option.targetAnchorId).toBe(event.targetAnchorId)
+    expect(result.wrapper.find('b').exists()).toBe(false)
+    await result.update({ scrollOffset: 12 }); await layout()
+    expect(result.selected).toHaveBeenCalledTimes(2)
+    expect(result.wrapper.find('[data-anchor-id="last"]').exists()).toBe(false)
+  })
+
+  it('keeps returned attributes immutable and detached from later document edits', async () => {
+    const q = question('one', 'last')
+    const result = render({ type: 'doc', content: [q, paragraph('last')] })
+    await result.wrapper.find('[data-option-id="stable-a"]').trigger('click')
+    const event: ResourceQuestionSelectEvent = result.selected.mock.lastCall![0]
+    expect(event.option).not.toBe(q.attrs.options[0])
+    expect(Object.isFrozen(event)).toBe(true)
+    expect(Object.isFrozen(event.option)).toBe(true)
+    expect(Reflect.set(event.option, 'label', 'Attempted mutation')).toBe(false)
+    expect(q.attrs.options[0].label).toBe('Same label')
+    q.attrs.options[0].label = 'Updated label'
+    q.attrs.options.reverse()
+    await nextTick()
+    expect(event.option.label).toBe('Same label')
+    await result.wrapper.find('[data-option-id="stable-a"]').trigger('click')
+    expect(result.selected.mock.lastCall![0].option).toEqual({ id: 'stable-a', label: 'Updated label', targetAnchorId: 'last' })
+  })
+})
+
 describe('host-controlled anchor navigation', () => {
   it('waits for scrollToAnchor even after the target is visible and unrelated rerenders occur', async () => {
     let request!: ResourceQuestionNavigationRequest
@@ -43,7 +80,7 @@ describe('host-controlled anchor navigation', () => {
     await result.wrapper.find('button').trigger('click')
     expect(result.selected).toHaveBeenCalledTimes(1)
     expect(callback).toHaveBeenCalledTimes(1)
-    expect(request).toEqual(expect.objectContaining({ questionId: 'one', resourceId: 'shared-resource', optionId: 'stable-a', revealKey: 'reveal-one', targetAnchorId: 'last' }))
+    expect(request).toEqual(expect.objectContaining({ questionId: 'one', resourceId: 'shared-resource', optionId: 'stable-a', revealKey: 'reveal-one', targetAnchorId: 'last', option: { id: 'stable-a', label: 'Same label', targetAnchorId: 'last' } }))
     expect(Object.isFrozen(request)).toBe(true)
     await result.update({ revealedKeys: ['reveal-one', 'reveal-two'] }); await layout()
     await result.update({ scrollOffset: 10 }); await layout()
@@ -227,11 +264,11 @@ describe('controlled visibility and snapshot rendering', () => {
     const doc = freezeDeep(article()); const original = JSON.stringify(doc)
     const { wrapper, selected, update } = render(doc)
     await wrapper.findAll('button').at(0).trigger('click'); await layout()
-    expect(selected).toHaveBeenLastCalledWith({ questionId: 'one', resourceId: 'shared-resource', optionId: 'stable-a', revealKey: 'reveal-one', targetAnchorId: 'last' })
+    expect(selected).toHaveBeenLastCalledWith({ questionId: 'one', resourceId: 'shared-resource', optionId: 'stable-a', revealKey: 'reveal-one', targetAnchorId: 'last', option: { id: 'stable-a', label: 'Same label', targetAnchorId: 'last' } })
     expect(wrapper.text()).not.toContain('middle')
     expect(window.scrollTo).not.toHaveBeenCalled()
     await wrapper.findAll('button').at(1).trigger('click')
-    expect(selected.mock.lastCall?.[0]).toEqual(expect.objectContaining({ optionId: 'stable-b' }))
+    expect(selected.mock.lastCall?.[0]).toEqual(expect.objectContaining({ optionId: 'stable-b', option: { id: 'stable-b', label: 'Same label' } }))
     expect(selected.mock.lastCall?.[0]).not.toHaveProperty('targetAnchorId')
     await update({ revealedKeys: ['reveal-one', 'reveal-two'] }); expect(wrapper.text()).toContain('last')
     await update({ revealedKeys: [] }); expect(wrapper.text()).not.toContain('middle')

@@ -37,6 +37,9 @@ describe('main demo reveal example', () => {
     await wrapper.find('[data-option-id="basics"]').trigger('click')
     expect(wrapper.vm.revealedKeys).toEqual(['reading-step-1'])
     expect(controls.find('[data-last-reveal-key]').text()).toBe('reading-step-1')
+    expect(JSON.parse(controls.find('[aria-label="最近点击的选项属性"]').text())).toEqual({
+      id: 'basics', label: '先了解基础', targetAnchorId: 'basics',
+    })
     expect(controls.find('[aria-label="当前 revealedKeys"]').text()).toContain('reading-step-1')
     expect(wrapper.find('[data-anchor-id="basics"]').exists()).toBe(true)
     expect(wrapper.find('[data-anchor-id="summary"]').exists()).toBe(false)

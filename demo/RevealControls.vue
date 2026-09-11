@@ -32,6 +32,10 @@ export default Vue.extend({
     <button type="button" @click="$emit('load-example')">载入解锁示例</button>
     <p v-if="lastEvent">最近收到的 revealKey：<code data-last-reveal-key>{{ lastEvent.revealKey }}</code></p>
     <p v-else>尚未点击正文选项。</p>
+    <details v-if="lastEvent" open>
+      <summary>选项点击回调收到的属性（event.option）</summary>
+      <pre aria-label="最近点击的选项属性">{{ JSON.stringify(lastEvent.option, null, 2) }}</pre>
+    </details>
     <p>当前传给渲染器的 <code>revealedKeys</code>：</p>
     <pre aria-label="当前 revealedKeys">{{ JSON.stringify(revealedKeys, null, 2) }}</pre>
     <div class="reveal-demo__navigation">
@@ -61,7 +65,11 @@ export default Vue.extend({
     <p v-if="boundaries.length">后面的解锁不能越过前面的未解锁问题。也可以使用上方按钮，演示宿主主动解锁或重新隐藏。</p>
     <details>
       <summary>查看状态更新代码</summary>
-      <pre>// 业务允许后解锁
+      <pre>// 通过 @option-select="handleOptionSelect" 接收点击事件
+// event.option 包含 id、label、targetAnchorId（可选）
+const selectedOption = event.option
+
+// 业务允许后解锁
 this.revealedKeys = [...new Set([...this.revealedKeys, event.revealKey])]
 
 // 主动重新隐藏时，取消旧请求和待跳转任务，再移除对应标识

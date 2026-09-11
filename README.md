@@ -502,7 +502,7 @@ export default Vue.extend({
 
 示例中的 `article-content` 是保存在 JSON 中的固定标识，可以替换为编辑器保存的随机值。选项事件始终返回当前问题的真实 `event.revealKey`，使用方不必预先知道它，也不要假定它等于问题 ID、资源 ID 或目标段落 ID。
 
-`option-select` 携带 `{ questionId, resourceId, optionId, revealKey, targetAnchorId? }`。组件先记录目标，再发出事件；默认在宿主更新列表、DOM 和布局就绪后定位。可通过下面的 `onAnchorNavigate` 回调控制滚动时机。没有目标的选项仍可解锁，只是不跳转。外部按钮直接解锁时，若没有待定位任务，则只显示内容。
+`option-select` 携带 `{ questionId, resourceId, optionId, option, revealKey, targetAnchorId? }`，其中 `option` 是被点击选项的完整属性。组件先记录目标，再发出事件；默认在宿主更新列表、DOM 和布局就绪后定位。可通过下面的 `onAnchorNavigate` 回调控制滚动时机。没有目标的选项仍可解锁，只是不跳转。外部按钮直接解锁时，若没有待定位任务，则只显示内容。
 
 ### 多个问题与重新隐藏
 
@@ -601,7 +601,7 @@ type OnAnchorNavigate = (
 ) => void | Promise<void>
 ```
 
-请求包含 `questionId`、`resourceId`、`optionId`、`revealKey` 和 `targetAnchorId`。`scrollToAnchor()` 继续使用组件的实例内锚点、`scrollContainer`、`scrollOffset` 和焦点处理。`request.cancel()` 只取消该次点击的定位，不改变解锁列表；也可使用 `renderer-ready` 提供的 `runtime.cancelPendingNavigation()` 取消当前定位。
+请求包含 `questionId`、`resourceId`、`optionId`、`option`、`revealKey` 和 `targetAnchorId`，可通过 `request.option` 读取选项属性。`scrollToAnchor()` 继续使用组件的实例内锚点、`scrollContainer`、`scrollOffset` 和焦点处理。`request.cancel()` 只取消该次点击的定位，不改变解锁列表；也可使用 `renderer-ready` 提供的 `runtime.cancelPendingNavigation()` 取消当前定位。
 
 没有绑定锚点或锚点已不存在时，仍发出 `option-select`，但不会调用 `onAnchorNavigate`。同步在 `option-select` 中取消定位时，也不会再调用该次导航回调。每次有效点击只回调一次，重新渲染不会重复回调。
 
@@ -632,9 +632,70 @@ type OnAnchorNavigate = (
 
 ## Events
 
-### option-select / renderer-ready
+### option-select：点击选项并获取属性
 
-`option-select` 返回 `{ questionId, resourceId, optionId, revealKey, targetAnchorId? }`。宿主业务允许后更新 `revealedKeys`；默认等待 DOM 和布局后定位可见目标。配置 `onAnchorNavigate` 后，还需使用方显式调用 `request.scrollToAnchor()`。
+通过 `@option-select="handleOptionSelect"` 注册点击回调，回调参数的 `event.option` 返回当前选项在文章 JSON 中保存的完整属性：
+
+```ts
+interface ResourceQuestionSelectEvent {
+  questionId: string
+  resourceId: string
+  optionId: string
+  option: Readonly<{
+    id: string
+    label: string
+    targetAnchorId?: string
+  }>
+  revealKey: string
+  targetAnchorId?: string
+}
+```
+
+下面的组件接收文章并展示最近点击选项的属性，可在回调内接入自己的业务操作：
+
+```vue
+<script lang="ts">
+import Vue, { type PropType } from 'vue'
+import ArticleContentRenderer, {
+  type ArticleDocument,
+  type ResourceQuestionOption,
+  type ResourceQuestionSelectEvent,
+} from 'article-content-renderer-vue2'
+import 'article-content-renderer-vue2/style.css'
+
+export default Vue.extend({
+  components: { ArticleContentRenderer },
+  props: {
+    article: { type: Object as PropType<ArticleDocument>, required: true },
+  },
+  data() {
+    return { selectedOption: null as Readonly<ResourceQuestionOption> | null }
+  },
+  methods: {
+    handleOptionSelect(event: ResourceQuestionSelectEvent): void {
+      this.selectedOption = event.option
+      // event.option.id：选项 ID
+      // event.option.label：选项文本
+      // event.option.targetAnchorId：目标锚点（未绑定时不存在）
+      // event.questionId / event.resourceId：所属问题及资源 ID
+    },
+  },
+})
+</script>
+
+<template>
+  <main>
+    <ArticleContentRenderer :document="article" @option-select="handleOptionSelect" />
+    <pre v-if="selectedOption">{{ JSON.stringify(selectedOption, null, 2) }}</pre>
+  </main>
+</template>
+```
+
+每次点击触发一次回调，包括重复点击同一选项、没有绑定锚点或锚点已删除的情况；无需在各个 JSON 选项中配置函数。选项通过所属问题和稳定的 `id` 匹配，同名选项也能区分。事件及其 `option` 是冻结的只读快照副本，不会随之后的文章修改而变化；需要编辑时先复制，例如 `{ ...event.option }`。原有的顶层 `optionId`、`targetAnchorId` 等字段继续保留。
+
+此示例只展示回调收到的属性。宿主业务允许后可更新 `revealedKeys` 来解锁隐藏内容；默认等待 DOM 和布局后定位可见目标。配置 `onAnchorNavigate` 后，还需使用方显式调用 `request.scrollToAnchor()`。两个 Demo 的解锁面板均会展示 `event.option`。
+
+### renderer-ready
 
 `renderer-ready` 返回 `ArticleRendererRuntime`，提供 `cancelPendingNavigation()`。Vue 2 函数式组件没有可通过 `ref` 获取的实例，请保存这个运行时句柄，在拒绝、失败或主动取消时调用。
 

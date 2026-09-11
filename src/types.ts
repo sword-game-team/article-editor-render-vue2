@@ -214,6 +214,8 @@ export interface ResourceQuestionSelectEvent {
   questionId: string
   resourceId: string
   optionId: string
+  /** Read-only copy of the selected option's saved protocol attributes. */
+  option: Readonly<ResourceQuestionOption>
   revealKey: string
   targetAnchorId?: string
 }

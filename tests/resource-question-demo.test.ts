@@ -21,6 +21,9 @@ describe('Vue 2 host example', () => {
     await controls.find('input[type="checkbox"]').setChecked(true)
     await wrapper.find('[data-option-id="basics"]').trigger('click')
     expect(wrapper.vm.pendingNavigation?.targetAnchorId).toBe('basics')
+    expect(JSON.parse(controls.find('[aria-label="最近点击的选项属性"]').text())).toEqual({
+      id: 'basics', label: '先了解基础', targetAnchorId: 'basics',
+    })
     vi.advanceTimersByTime(800); await settle()
     expect(wrapper.vm.revealedKeys).toEqual(['reading-step-1'])
     expect(document.activeElement?.getAttribute('data-anchor-id')).not.toBe('basics')

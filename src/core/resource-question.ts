@@ -58,6 +58,7 @@ export class NavigationSession {
           selections.set(option.id, Object.freeze({
             questionId: attrs.id as string, resourceId: attrs.resourceId as string,
             optionId: option.id, revealKey: attrs.revealKey as string,
+            option: Object.freeze({ ...option }),
             ...(option.targetAnchorId !== undefined ? { targetAnchorId: option.targetAnchorId } : {}),
           }))
         })

@@ -2,8 +2,18 @@ import Vue from 'vue'
 import { createRenderer } from 'vue-server-renderer'
 import { describe, expect, it } from 'vitest'
 import ArticleContentRenderer from '../src'
+import { article } from './resource-fixtures'
 
 describe('server-side rendering', () => {
+  it('respects controlled resource boundaries without browser globals', async () => {
+    for (const keys of [[], ['reveal-one', 'reveal-two']]) {
+      const app = new Vue({ render: (h) => h('main', [h(ArticleContentRenderer, { props: { document: article(), revealedKeys: keys } })]) })
+      const html = await createRenderer().renderToString(app)
+      expect(html).toContain('Question one')
+      expect(html.includes('data-anchor-id="last"')).toBe(keys.length > 0)
+      expect(html).not.toContain('acp-document')
+    }
+  })
   it('renders protocol content without browser globals', async () => {
     const app = new Vue({
       render: (createElement) =>

@@ -2,6 +2,7 @@ export type ProtocolVersion = 1
 
 export type TextAlign = 'left' | 'center' | 'right' | 'justify'
 export type ImageAlign = 'left' | 'center' | 'right'
+export type ImageLayout = 'two-column'
 export type ArticleButtonStyle = 'text' | 'button' | 'link'
 export type LinkTarget = '_blank' | '_self'
 
@@ -58,6 +59,16 @@ export interface CustomLinkMark {
 
 export type LinkMark = HrefLinkMark | CustomLinkMark
 
+export interface TextStyleMark {
+  type: 'textStyle'
+  attrs: { color: string }
+}
+
+export interface HighlightMark {
+  type: 'highlight'
+  attrs: { color: string }
+}
+
 export type ArticleMark =
   | BoldMark
   | ItalicMark
@@ -65,6 +76,8 @@ export type ArticleMark =
   | UnderlineMark
   | CodeMark
   | LinkMark
+  | TextStyleMark
+  | HighlightMark
 
 export interface TextNode {
   type: 'text'
@@ -76,6 +89,8 @@ export interface ParagraphNode {
   type: 'paragraph'
   attrs?: {
     textAlign?: TextAlign
+    anchorId?: string
+    fontSize?: number
   }
   content?: TextNode[]
 }
@@ -85,6 +100,7 @@ export interface HeadingNode {
   attrs: {
     level: 1 | 2 | 3 | 4 | 5 | 6
     textAlign?: TextAlign
+    anchorId?: string
   }
   content?: TextNode[]
 }
@@ -138,6 +154,7 @@ export interface ImageNode {
     width?: number
     height?: number
     imageAlign?: ImageAlign
+    imageLayout?: ImageLayout
   }
 }
 
@@ -172,6 +189,52 @@ export interface ArticleButtonLinkNode {
 
 export type ArticleButtonNode = ArticleButtonActionNode | ArticleButtonLinkNode
 
+export interface ResourceQuestionOption {
+  id: string
+  label: string
+  targetAnchorId?: string
+}
+
+export interface ResourceQuestionAttrs {
+  id: string
+  resourceId: string
+  title: string
+  description: string
+  options: ResourceQuestionOption[]
+  hideFollowing: boolean
+  revealKey: string
+}
+
+export interface ResourceQuestionNode {
+  type: 'resourceQuestion'
+  attrs: ResourceQuestionAttrs
+}
+
+export interface ResourceQuestionSelectEvent {
+  questionId: string
+  resourceId: string
+  optionId: string
+  revealKey: string
+  targetAnchorId?: string
+}
+
+/** One option click's navigation request. Methods become no-ops after cancellation or replacement. */
+export interface ResourceQuestionNavigationRequest extends ResourceQuestionSelectEvent {
+  targetAnchorId: string
+  scrollToAnchor(): void
+  cancel(): void
+}
+
+/** Suppresses automatic navigation; call request.scrollToAnchor() when the host is ready. */
+export type OnAnchorNavigate = (
+  request: Readonly<ResourceQuestionNavigationRequest>,
+) => void | Promise<void>
+
+/** Delivered through renderer-ready; keep one handle per renderer instance. */
+export interface ArticleRendererRuntime {
+  cancelPendingNavigation(): void
+}
+
 export interface TableNode {
   type: 'table'
   content: TableRowNode[]
@@ -201,12 +264,15 @@ export type BlockNode =
 
 export interface ArticleDocument {
   type: 'doc'
-  content: BlockNode[]
+  content: TopLevelNode[]
 }
+
+export type TopLevelNode = BlockNode | ResourceQuestionNode
 
 export type ArticleContentNode =
   | ArticleDocument
   | BlockNode
+  | ResourceQuestionNode
   | ListItemNode
   | TableRowNode
   | TableCellNode
@@ -251,12 +317,16 @@ export type RenderIssueCode =
   | 'UNSAFE_URL'
   | 'LINK_RESOLUTION_FAILED'
   | 'UNSUPPORTED_PROTOCOL'
+  | 'DUPLICATE_IDENTITY'
+  | 'MISSING_ANCHOR'
+  | 'NAVIGATION_CALLBACK_FAILED'
 
 export interface RenderIssue {
   code: RenderIssueCode
   path: string
   message: string
   nodeType?: string
+  severity?: 'error' | 'warning'
 }
 
 export interface ValidationResult {

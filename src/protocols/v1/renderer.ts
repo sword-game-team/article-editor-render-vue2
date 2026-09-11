@@ -53,6 +53,8 @@ function createVNode(
       data.class = value as VNodeData['class']
     } else if (key === 'style') {
       data.style = value as VNodeData['style']
+    } else if (key === 'hook') {
+      data.hook = value as VNodeData['hook']
     } else if (key.startsWith('on') && typeof value === 'function') {
       const eventName = key.slice(2).toLowerCase()
       data.on = { ...(data.on ?? {}), [eventName]: value }
@@ -121,6 +123,17 @@ function renderText(value: unknown, path: string, context: RenderContext): Rende
       case 'code':
         rendered = createVNode(context, 'code', { class: 'acp-mark acp-mark--code' }, [rendered])
         break
+      case 'textStyle':
+      case 'highlight': {
+        const attrs = recordValue(mark.attrs)
+        if (typeof attrs.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(attrs.color)) {
+          rendered = createVNode(context, mark.type === 'highlight' ? 'mark' : 'span', {
+            class: `acp-mark acp-mark--${mark.type}`,
+            style: mark.type === 'highlight' ? { backgroundColor: attrs.color, color: 'inherit' } : { color: attrs.color },
+          }, [rendered])
+        }
+        break
+      }
       case 'link': {
         const attrs = recordValue(mark.attrs)
         const target: LinkTarget = validTarget(attrs.target) ? attrs.target : '_blank'
@@ -420,7 +433,11 @@ function renderBlock(value: unknown, path: string, context: RenderContext): Rend
         {
           class: 'acp-paragraph',
           'data-node-type': 'paragraph',
-          style: textAlign ? { textAlign } : undefined,
+          ...anchorProps(attrs, context),
+          style: {
+            textAlign,
+            fontSize: Number.isInteger(attrs.fontSize) && Number(attrs.fontSize) >= 8 && Number(attrs.fontSize) <= 96 ? `${attrs.fontSize}px` : undefined,
+          },
         },
         renderInlineContent(value.content, childPath(path, 'content'), context),
       )
@@ -436,6 +453,7 @@ function renderBlock(value: unknown, path: string, context: RenderContext): Rend
         {
           class: ['acp-heading', `acp-heading--${level}`],
           'data-node-type': 'heading',
+          ...anchorProps(attrs, context),
           style: textAlign ? { textAlign } : undefined,
         },
         renderInlineContent(value.content, childPath(path, 'content'), context),
@@ -513,6 +531,7 @@ function renderBlock(value: unknown, path: string, context: RenderContext): Rend
           class: ['acp-image', `acp-image--${imageAlign}`],
           'data-node-type': 'image',
           'data-image-align': imageAlign,
+          'data-image-layout': attrs.imageLayout === 'two-column' ? 'two-column' : undefined,
         },
         [
           createVNode(context, 'img', {
@@ -544,10 +563,66 @@ function renderBlock(value: unknown, path: string, context: RenderContext): Rend
   return null
 }
 
+function anchorProps(attrs: UnknownRecord, context: RenderContext): UnknownRecord {
+  if (typeof attrs.anchorId !== 'string' || !/\S/.test(attrs.anchorId)) return {}
+  return {
+    'data-anchor-id': attrs.anchorId,
+    tabindex: -1,
+    hook: context.navigation.anchorHooks(attrs.anchorId),
+  }
+}
+
+function renderResourceQuestion(node: UnknownRecord, context: RenderContext): VNode {
+  const attrs = recordValue(node.attrs)
+  const options = context.navigation.selections.get(attrs.id as string)
+  const children: VNode[] = []
+  if (attrs.resourceId === '') {
+    children.push(createVNode(context, 'p', { class: 'acp-resource-question__placeholder' }, '暂无问题内容'))
+  } else {
+    children.push(createVNode(context, 'legend', { class: 'acp-resource-question__title' }, String(attrs.title)))
+    if (attrs.description) children.push(createVNode(context, 'p', { class: 'acp-resource-question__description' }, String(attrs.description)))
+    children.push(createVNode(context, 'div', { class: 'acp-resource-question__options' },
+      arrayValue(attrs.options).filter(isRecord).map((option) => createVNode(context, 'button', {
+        type: 'button', class: 'acp-resource-question__option',
+        'data-option-id': option.id,
+        onClick: () => {
+          const event = options?.get(option.id as string)
+          if (event) context.navigation.select(event)
+        },
+      }, String(option.label))),
+    ))
+  }
+  return createVNode(context, 'fieldset', {
+    class: 'acp-resource-question', 'data-node-type': 'resourceQuestion',
+    'data-question-id': attrs.id,
+  }, children)
+}
+
+function isColumnImage(node: unknown): boolean {
+  return isRecord(node) && node.type === 'image' && recordValue(node.attrs).imageLayout === 'two-column'
+}
+
+function appendBlock(rendered: VNode[], node: unknown, path: string, context: RenderContext, previousRow?: VNode): VNode | undefined {
+  const child = renderBlock(node, path, context)
+  if (!isColumnImage(node)) {
+    if (child && typeof child !== 'string') rendered.push(child)
+    return undefined
+  }
+  if (!child || typeof child === 'string') return previousRow
+  if (previousRow && (previousRow.children?.length ?? 0) < 2) {
+    previousRow.children!.push(child)
+    return previousRow
+  }
+  const row = createVNode(context, 'div', { class: 'acp-image-row' }, [child])
+  rendered.push(row)
+  return row
+}
+
 function renderBlockContent(value: unknown, path: string, context: RenderContext): RenderedChild[] {
-  return arrayValue(value)
-    .map((child, index) => renderBlock(child, childPath(path, index), context))
-    .filter((child): child is Exclude<RenderedChild, null> => child !== null)
+  const rendered: VNode[] = []
+  let row: VNode | undefined
+  arrayValue(value).forEach((node, index) => { row = appendBlock(rendered, node, childPath(path, index), context, row) })
+  return rendered
 }
 
 function renderDocumentContent(document: UnknownRecord, context: RenderContext): VNode[] {
@@ -568,12 +643,22 @@ function renderDocumentContent(document: UnknownRecord, context: RenderContext):
   })
 
   const rendered: VNode[] = []
-  content.forEach((node, index) => {
+  const allowed = new Set(context.navigation.options.revealedKeys)
+  let row: VNode | undefined
+  for (let index = 0; index < content.length; index += 1) {
+    const node = content[index]
     const location = index + 1
-    slotsByLocation.get(location)?.forEach((slot) => rendered.push(...slot.content))
-    const child = renderBlock(node, childPath('/content', index), context)
-    if (child && typeof child !== 'string') rendered.push(child)
-  })
+    slotsByLocation.get(location)?.forEach((slot) => {
+      if (slot.content.length) row = undefined
+      rendered.push(...slot.content)
+    })
+    if (isRecord(node) && node.type === 'resourceQuestion') {
+      row = undefined
+      rendered.push(renderResourceQuestion(node, context))
+      const attrs = recordValue(node.attrs)
+      if (attrs.hideFollowing === true && !allowed.has(attrs.revealKey as string)) break
+    } else row = appendBlock(rendered, node, childPath('/content', index), context, row)
+  }
   return rendered
 }
 

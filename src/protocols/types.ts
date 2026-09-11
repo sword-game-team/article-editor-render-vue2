@@ -1,4 +1,5 @@
 import type { CreateElement, VNode } from 'vue'
+import type { NavigationSession } from '../core/resource-question.js'
 import type {
   ArticleButtonClickPayload,
   RenderIssue,
@@ -15,6 +16,7 @@ export interface RenderContext {
   resolveCustomLink?: ResolveCustomLink
   emitArticleButtonClick: (payload: ArticleButtonClickPayload) => void
   reportIssue: (issue: RenderIssue) => void
+  navigation: NavigationSession
 }
 
 export interface ResolvedCustomSlot {

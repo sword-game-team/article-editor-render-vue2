@@ -108,6 +108,71 @@
   height: auto;
 }
 
+.acp-image-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--acp-image-gap, 1rem);
+  align-items: start;
+}
+
+.acp-image-row > .acp-image {
+  min-width: 0;
+}
+
+.acp-resource-question {
+  min-inline-size: 0;
+  margin: 0 0 var(--acp-spacing-block);
+  padding: 1rem;
+  border: 1px solid var(--acp-color-border);
+  border-radius: var(--acp-radius);
+  color: var(--acp-color-text);
+}
+
+.acp-resource-question__title {
+  padding-inline: 0.25rem;
+  font-size: 1.125em;
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.acp-resource-question__description,
+.acp-resource-question__placeholder {
+  margin: 0 0 0.75rem;
+  color: var(--acp-color-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.acp-resource-question__options {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.acp-resource-question__option {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--acp-color-border);
+  border-radius: var(--acp-radius);
+  background: var(--acp-color-surface);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.acp-resource-question__option:hover {
+  border-color: var(--acp-color-accent);
+}
+
+.acp-resource-question__option:focus-visible,
+.acp-paragraph[data-anchor-id]:focus,
+.acp-heading[data-anchor-id]:focus {
+  outline: 2px solid var(--acp-color-accent);
+  outline-offset: 3px;
+}
+
 .acp-link,
 .acp-article-button--text,
 .acp-article-button--link {

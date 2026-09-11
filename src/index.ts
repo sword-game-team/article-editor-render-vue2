@@ -3,6 +3,7 @@ import ArticleContentRenderer from './components/ArticleContentRenderer.vue'
 
 export { ArticleContentRenderer }
 export default ArticleContentRenderer
+export { getVisibleContent } from './core/resource-question.js'
 
 export const ArticleContentRendererPlugin: PluginObject<never> = {
   install(Vue): void {
@@ -29,6 +30,7 @@ export type {
   ArticleButtonStyle,
   ArticleContentNode,
   ArticleDocument,
+  ArticleRendererRuntime,
   ArticleMark,
   BlockNode,
   BlockquoteNode,
@@ -43,8 +45,10 @@ export type {
   CustomLinkMarkAttrs,
   CustomSlot,
   HeadingNode,
+  HighlightMark,
   HorizontalRuleNode,
   ImageAlign,
+  ImageLayout,
   ImageNode,
   ItalicMark,
   HrefLinkMark,
@@ -59,12 +63,20 @@ export type {
   RenderIssueCode,
   ResolveArticleButtonLink,
   ResolveCustomLink,
+  ResourceQuestionAttrs,
+  ResourceQuestionNode,
+  ResourceQuestionOption,
+  ResourceQuestionSelectEvent,
+  ResourceQuestionNavigationRequest,
+  OnAnchorNavigate,
   StrikeMark,
   TableCellNode,
   TableNode,
   TableRowNode,
   TextAlign,
   TextNode,
+  TextStyleMark,
+  TopLevelNode,
   UnderlineMark,
   ValidationResult,
 } from './types.js'

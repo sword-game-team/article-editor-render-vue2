@@ -2,9 +2,9 @@ export const ARTICLE_CONTENT_PROTOCOL_V1 = Object.freeze({
   fileFormat: 'article-content-protocol',
   fileFormatVersion: 1,
   mediaType: 'application/vnd.article-content-protocol+json',
-  id: 'article-content-v1',
+  id: 'article-content-v1-with-extensions',
   version: 1,
-  name: 'Article Content Protocol v1',
+  name: 'Article Content Protocol v1 + Extensions',
   status: 'draft',
   rootNode: 'doc',
   nodeTypes: Object.freeze([
@@ -23,7 +23,8 @@ export const ARTICLE_CONTENT_PROTOCOL_V1 = Object.freeze({
     'tableRow',
     'tableCell',
     'text',
+    'resourceQuestion',
   ]),
-  markTypes: Object.freeze(['bold', 'italic', 'strike', 'underline', 'code', 'link']),
+  markTypes: Object.freeze(['bold', 'italic', 'strike', 'underline', 'code', 'link', 'textStyle', 'highlight']),
+  extensions: Object.freeze(['text-formatting', 'paragraph-font-size', 'image-layout', 'resource-question', 'paragraph-anchor']),
 })
-

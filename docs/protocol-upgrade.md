@@ -13,6 +13,14 @@
 
 Vue 2 版本的协议逻辑应与 Vue 3 版本保持一致；仅 VNode 数据结构、事件绑定和根节点兼容方式不同。
 
+## v1 + Extensions
+
+当前下载协议的版本仍为 `1`，在既有 v1 适配器中新增 `textStyle`、`highlight`、段落 `fontSize`、`imageLayout`、`anchorId` 和 `resourceQuestion`。结构先由协议文件内的 `documentSchema` 校验，再执行内容模型和跨节点约束。保留旧版省略默认字段的兼容行为，不修改输入文档。
+
+资源问题按顶层顺序受宿主 `revealedKeys` 控制，点击只通知宿主。定位状态由实例内生命周期组件管理，继续保持 Vue 2 多根输出；使用 `renderer-ready` 获取取消入口。详见 [Vue 2 接入说明](resource-question-vue2.md)。升级验收还需覆盖多边界、同步/异步解锁、取消、切换文章、特殊锚点、多实例及 SSR。
+
+可选 `onAnchorNavigate` 回调控制选项点击后的滚动时机：配置后只有调用请求的 `scrollToAnchor()` 才定位，省略时保持原有默认行为。此接口不改变协议 JSON 或宿主解锁规则。验收需覆盖默认滚动、自定义延迟、过期回调失效和异常处理。
+
 ## articleButton 兼容约束
 
 `articleButton` 的 text、button、link 三种样式都使用 `<a>`。text/button 由 resolver 返回完整链接，渲染器不得自动添加 query、hash 或其他节点属性；link 直接使用节点的 `href`，不得调用 resolver。text/button 必须提供 `id`，link 的 `id` 和 `href` 均可省略。

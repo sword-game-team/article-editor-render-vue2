@@ -7,6 +7,7 @@ import Vue, {
   type VNode,
 } from 'vue'
 import { DEFAULT_IMAGE_BASE_URL } from '../core/url.js'
+import { NavigationSession, ResourceNavigation } from '../core/resource-question.js'
 import {
   CURRENT_PROTOCOL_VERSION,
   getProtocolAdapter,
@@ -19,6 +20,8 @@ import type {
   RenderIssue,
   ResolveArticleButtonLink,
   ResolveCustomLink,
+  ResourceQuestionSelectEvent,
+  OnAnchorNavigate,
 } from '../types.js'
 
 interface ArticleContentRendererProps {
@@ -29,6 +32,11 @@ interface ArticleContentRendererProps {
   imageBaseUrl: string
   resolveArticleButtonLink?: ResolveArticleButtonLink
   resolveCustomLink?: ResolveCustomLink
+  revealedKeys: string[]
+  articleKey?: string | number
+  scrollContainer?: HTMLElement | (() => HTMLElement | null)
+  scrollOffset: number
+  onAnchorNavigate?: OnAnchorNavigate
 }
 
 function createEmptyCustomSlots(): CustomSlot[] {
@@ -62,14 +70,16 @@ function emitListener(listener: Function | Function[] | undefined, payload: unkn
 const RenderIssueReporter = Vue.extend({
   name: 'ArticleContentRenderIssueReporter',
   props: {
+    navigationSession: { type: Object as PropType<NavigationSession>, required: true },
     issues: {
       type: Array as PropType<RenderIssue[]>,
       required: true,
     },
   },
-  data(): { reportedFingerprint: string } {
+  data() {
     return {
       reportedFingerprint: '',
+      navigation: new ResourceNavigation(),
     }
   },
   watch: {
@@ -80,11 +90,21 @@ const RenderIssueReporter = Vue.extend({
         const fingerprint = issues.map(issueKey).join('|')
         if (fingerprint === this.reportedFingerprint) return
         this.reportedFingerprint = fingerprint
-        this.$nextTick(() => issues.forEach((issue) => this.$emit('render-error', issue)))
+        const session = this.navigationSession
+        this.$nextTick(() => {
+          if (session === this.navigationSession && !this.$isServer) issues.forEach((issue) => this.$emit('render-error', issue))
+        })
       },
     },
   },
+  mounted(): void {
+    this.$emit('renderer-ready', this.navigation.api)
+    this.navigation.schedule()
+  },
+  updated(): void { this.navigation.schedule() },
+  beforeDestroy(): void { this.navigation.dispose() },
   render(createElement: CreateElement): VNode {
+    this.navigation.update(this.navigationSession)
     return this.$slots.default?.[0] ?? createElement()
   },
 })
@@ -94,14 +114,19 @@ function attachIssueReporter(
   context: RenderContext<ArticleContentRendererProps>,
   children: VNode[],
   issues: RenderIssue[],
+  navigationSession: NavigationSession,
 ): VNode | VNode[] {
   const firstChild = children[0] ?? createElement()
   const renderErrorListener = context.listeners['render-error']
   const reporter = createElement(
     RenderIssueReporter,
     {
-      props: { issues },
-      on: renderErrorListener ? { 'render-error': renderErrorListener } : undefined,
+      key: context.data.key,
+      props: { issues, navigationSession },
+      on: {
+        ...(renderErrorListener ? { 'render-error': renderErrorListener } : {}),
+        ...(context.listeners['renderer-ready'] ? { 'renderer-ready': context.listeners['renderer-ready'] } : {}),
+      },
     },
     [firstChild],
   )
@@ -141,6 +166,17 @@ const ArticleContentRenderer = {
       type: Function as PropType<ResolveCustomLink>,
       default: undefined,
     },
+    revealedKeys: { type: Array as PropType<string[]>, default: () => [] },
+    articleKey: { type: [String, Number], default: undefined },
+    scrollContainer: {
+      type: null as unknown as PropType<HTMLElement | (() => HTMLElement | null)>,
+      default: undefined,
+      // Vue 2's Object prop check only accepts plain objects, not actual DOM elements.
+      validator: (value: unknown) => typeof value === 'function' ||
+        (typeof value === 'object' && value !== null && 'nodeType' in value && value.nodeType === 1),
+    },
+    scrollOffset: { type: Number, default: 0 },
+    onAnchorNavigate: { type: Function as PropType<OnAnchorNavigate>, default: undefined },
   },
   render(createElement, context): VNode | VNode[] {
     const { props } = context
@@ -149,8 +185,26 @@ const ArticleContentRenderer = {
     })
     const adapter = getProtocolAdapter(props.protocolVersion)
     const runtimeIssues: RenderIssue[] = []
+    const navigationSession = new NavigationSession({
+      document: validation.valid ? props.document : null,
+      articleKey: props.articleKey,
+      revealedKeys: [...props.revealedKeys],
+      scrollContainer: props.scrollContainer,
+      scrollOffset: props.scrollOffset,
+      onAnchorNavigate: props.onAnchorNavigate,
+      reportNavigationIssue: (issue) => emitListener(context.listeners['render-error'], issue),
+      emitSelect: (event: ResourceQuestionSelectEvent) => emitListener(context.listeners['option-select'], event),
+    })
+    // Invalid identities and question structure cannot safely participate in visibility/navigation.
+    const unsafeQuestion = validation.issues.some((issue) => issue.severity !== 'warning' &&
+      (issue.code === 'DUPLICATE_IDENTITY' || issue.nodeType === 'resourceQuestion' ||
+        /\/(anchorId|revealKey)(\/|$)/.test(issue.path)))
+    const hasQuestion = navigationSession.selections.size > 0 ||
+      (props.document && typeof props.document === 'object' && 'content' in props.document &&
+        Array.isArray(props.document.content) && props.document.content.some((node: unknown) =>
+          node && typeof node === 'object' && 'type' in node && node.type === 'resourceQuestion'))
 
-    if (!adapter || (props.strict && !validation.valid)) {
+    if (!adapter || unsafeQuestion || ((props.strict || hasQuestion) && !validation.valid)) {
       const errorNode = createElement(
         'div',
         {
@@ -162,7 +216,7 @@ const ArticleContentRenderer = {
         },
         'Invalid article content',
       )
-      return attachIssueReporter(createElement, context, [errorNode], validation.issues)
+      return attachIssueReporter(createElement, context, [errorNode], validation.issues, navigationSession)
     }
 
     const children = adapter.render(props.document, {
@@ -174,6 +228,7 @@ const ArticleContentRenderer = {
       emitArticleButtonClick: (payload: ArticleButtonClickPayload) =>
         emitListener(context.listeners['article-button-click'], payload),
       reportIssue: (issue) => runtimeIssues.push(issue),
+      navigation: navigationSession,
     })
 
     return attachIssueReporter(createElement, context, children, [
@@ -182,7 +237,7 @@ const ArticleContentRenderer = {
         (issue, index, allIssues) =>
           allIssues.findIndex((candidate) => issueKey(candidate) === issueKey(issue)) === index,
       ),
-    ])
+    ], navigationSession)
   },
 } satisfies FunctionalComponentOptions<ArticleContentRendererProps>
 

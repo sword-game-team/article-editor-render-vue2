@@ -1,4 +1,5 @@
 import type { RenderIssue, ValidationResult } from '../../types.js'
+import { validateDocumentSchema } from './schema.js'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -35,6 +36,8 @@ function nestedPath(path: string, ...keys: Array<string | number>): string {
 
 class ProtocolV1Validator {
   readonly issues: RenderIssue[] = []
+  private readonly identities = new Map<string, Set<string>>()
+  private readonly targets: Array<{ id: string; path: string }> = []
 
   validate(document: unknown): ValidationResult {
     if (!isRecord(document)) {
@@ -49,14 +52,21 @@ class ProtocolV1Validator {
     }
 
     const content = this.requireArray(document.content, '/content')
-    content?.forEach((node, index) => this.validateBlock(node, childPath('/content', index)))
+    content?.forEach((node, index) => this.validateBlock(node, childPath('/content', index), true))
+    for (const target of this.targets) {
+      if (!this.identities.get('anchorId')?.has(target.id)) {
+        this.issues.push({ code: 'MISSING_ANCHOR', path: target.path,
+          message: `Bound target "${target.id}" no longer exists.`,
+          nodeType: 'resourceQuestion', severity: 'warning' })
+      }
+    }
 
     return this.result()
   }
 
   private result(): ValidationResult {
     return {
-      valid: this.issues.length === 0,
+      valid: !this.issues.some((issue) => issue.severity !== 'warning'),
       issues: this.issues,
     }
   }
@@ -203,7 +213,7 @@ class ProtocolV1Validator {
     return true
   }
 
-  private validateBlock(value: unknown, path: string): void {
+  private validateBlock(value: unknown, path: string, topLevel = false): void {
     if (!isRecord(value)) {
       this.add('INVALID_TYPE', path, 'A block node must be an object.')
       return
@@ -212,6 +222,11 @@ class ProtocolV1Validator {
     const type = value.type
     if (typeof type !== 'string') {
       this.add('MISSING_PROPERTY', childPath(path, 'type'), 'A block node requires a type.')
+      return
+    }
+    if (type === 'resourceQuestion') {
+      if (!topLevel) this.add('INVALID_CONTENT', path, 'resourceQuestion is only allowed directly inside doc.', type)
+      this.validateResourceQuestion(value, path)
       return
     }
     if (!BLOCK_TYPES.has(type)) {
@@ -265,7 +280,8 @@ class ProtocolV1Validator {
     this.checkProperties(node, path, ['type', 'attrs', 'content'], ['type', 'attrs'], type)
     const attrs = this.requireRecord(node.attrs, childPath(path, 'attrs'), type)
     if (attrs) {
-      this.checkProperties(attrs, childPath(path, 'attrs'), ['level', 'textAlign'], ['level'], type)
+      this.checkProperties(attrs, childPath(path, 'attrs'), ['level', 'textAlign', 'anchorId'], ['level'], type)
+      this.validateAnchor(attrs, childPath(path, 'attrs'))
       this.requireInteger(attrs.level, nestedPath(path, 'attrs', 'level'), type, 1, 6)
       this.validateTextAlign(attrs.textAlign, nestedPath(path, 'attrs', 'textAlign'), type)
     }
@@ -282,7 +298,9 @@ class ProtocolV1Validator {
       ? this.requireRecord(value, path, nodeType)
       : this.optionalRecord(value, path, nodeType)
     if (!attrs) return
-    this.checkProperties(attrs, path, ['textAlign'], [], nodeType)
+    this.checkProperties(attrs, path, ['textAlign', 'anchorId', 'fontSize'], [], nodeType)
+    this.validateAnchor(attrs, path)
+    if (attrs.fontSize !== undefined) this.requireInteger(attrs.fontSize, childPath(path, 'fontSize'), nodeType, 8, 96)
     this.validateTextAlign(attrs.textAlign, childPath(path, 'textAlign'), nodeType)
   }
 
@@ -329,6 +347,17 @@ class ProtocolV1Validator {
     }
     if (SIMPLE_MARKS.has(value.type)) {
       this.checkProperties(value, path, ['type'], ['type'], value.type)
+      return
+    }
+    if (value.type === 'textStyle' || value.type === 'highlight') {
+      this.checkProperties(value, path, ['type', 'attrs'], ['type', 'attrs'], value.type)
+      const attrs = this.requireRecord(value.attrs, childPath(path, 'attrs'), value.type)
+      if (attrs) {
+        this.checkProperties(attrs, childPath(path, 'attrs'), ['color'], ['color'], value.type)
+        if (typeof attrs.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(attrs.color)) {
+          this.add('INVALID_VALUE', nestedPath(path, 'attrs', 'color'), 'Color must be a six-digit hex value.', value.type)
+        }
+      }
       return
     }
     if (value.type !== 'link') {
@@ -480,11 +509,14 @@ class ProtocolV1Validator {
     this.checkProperties(
       attrs,
       childPath(path, 'attrs'),
-      ['src', 'alt', 'title', 'width', 'height', 'imageAlign'],
+      ['src', 'alt', 'title', 'width', 'height', 'imageAlign', 'imageLayout'],
       ['src'],
       type,
     )
     this.requireString(attrs.src, nestedPath(path, 'attrs', 'src'), type)
+    if (attrs.imageLayout !== undefined && attrs.imageLayout !== 'two-column') {
+      this.add('INVALID_VALUE', nestedPath(path, 'attrs', 'imageLayout'), 'Image layout must be "two-column".', type)
+    }
     this.optionalString(attrs.alt, nestedPath(path, 'attrs', 'alt'), type, { allowEmpty: true })
     this.optionalString(attrs.title, nestedPath(path, 'attrs', 'title'), type, { allowEmpty: true })
     if (attrs.width !== undefined) {
@@ -505,6 +537,70 @@ class ProtocolV1Validator {
         )
       }
     }
+  }
+
+  private nonBlank(value: unknown, path: string): value is string {
+    if (!this.requireString(value, path)) return false
+    if (!/\S/.test(value)) {
+      this.add('INVALID_VALUE', path, 'The string must contain a non-whitespace character.')
+      return false
+    }
+    return true
+  }
+
+  private identity(value: unknown, kind: string, path: string): void {
+    if (!this.nonBlank(value, path)) return
+    const seen = this.identities.get(kind) ?? new Set<string>()
+    if (seen.has(value)) this.add('DUPLICATE_IDENTITY', path, `Duplicate ${kind}: "${value}".`)
+    seen.add(value)
+    this.identities.set(kind, seen)
+  }
+
+  private validateAnchor(attrs: UnknownRecord, path: string): void {
+    if ('anchorId' in attrs) this.identity(attrs.anchorId, 'anchorId', childPath(path, 'anchorId'))
+  }
+
+  private validateResourceQuestion(node: UnknownRecord, path: string): void {
+    const type = 'resourceQuestion'
+    this.checkProperties(node, path, ['type', 'attrs'], ['type', 'attrs'], type)
+    const attrsPath = childPath(path, 'attrs')
+    const attrs = this.requireRecord(node.attrs, attrsPath, type)
+    if (!attrs) return
+    const fields = ['id', 'resourceId', 'title', 'description', 'options', 'hideFollowing', 'revealKey']
+    this.checkProperties(attrs, attrsPath, fields, fields, type)
+    this.identity(attrs.id, 'questionId', childPath(attrsPath, 'id'))
+    this.identity(attrs.revealKey, 'revealKey', childPath(attrsPath, 'revealKey'))
+    for (const field of ['resourceId', 'title', 'description']) {
+      this.requireString(attrs[field], childPath(attrsPath, field), type, { allowEmpty: true })
+    }
+    if (typeof attrs.hideFollowing !== 'boolean') {
+      this.add('INVALID_TYPE', childPath(attrsPath, 'hideFollowing'), 'Expected a boolean.', type)
+    }
+    const options = this.requireArray(attrs.options, childPath(attrsPath, 'options'), type)
+    if (attrs.resourceId === '') {
+      if (attrs.title !== '' || attrs.description !== '' || (options && options.length !== 0)) {
+        this.add('INVALID_VALUE', attrsPath, 'An unconfigured question must have empty title, description and options.', type)
+      }
+    } else {
+      this.nonBlank(attrs.resourceId, childPath(attrsPath, 'resourceId'))
+      this.nonBlank(attrs.title, childPath(attrsPath, 'title'))
+      if (options?.length === 0) this.add('INVALID_CONTENT', childPath(attrsPath, 'options'), 'A configured question requires an option.', type)
+    }
+    const optionIds = new Set<string>()
+    options?.forEach((value, index) => {
+      const optionPath = nestedPath(attrsPath, 'options', index)
+      const option = this.requireRecord(value, optionPath, type)
+      if (!option) return
+      this.checkProperties(option, optionPath, ['id', 'label', 'targetAnchorId'], ['id', 'label'], type)
+      if (this.nonBlank(option.id, childPath(optionPath, 'id'))) {
+        if (optionIds.has(option.id)) this.add('DUPLICATE_IDENTITY', childPath(optionPath, 'id'), `Duplicate optionId: "${option.id}".`, type)
+        optionIds.add(option.id)
+      }
+      this.nonBlank(option.label, childPath(optionPath, 'label'))
+      if ('targetAnchorId' in option && this.nonBlank(option.targetAnchorId, childPath(optionPath, 'targetAnchorId'))) {
+        this.targets.push({ id: option.targetAnchorId, path: childPath(optionPath, 'targetAnchorId') })
+      }
+    })
   }
 
   private validateArticleButton(node: UnknownRecord, path: string): void {
@@ -605,6 +701,12 @@ class ProtocolV1Validator {
 }
 
 export function validateDocumentV1(document: unknown): ValidationResult {
-  return new ProtocolV1Validator().validate(document)
+  const schemaIssues = validateDocumentSchema(document)
+  const result = new ProtocolV1Validator().validate(document)
+  // Keep existing, precise diagnostics; schema validation covers any structural gap.
+  if (schemaIssues.length && result.valid) {
+    return { valid: false, issues: [...schemaIssues, ...result.issues] }
+  }
+  return result
 }
 

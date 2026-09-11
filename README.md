@@ -6,7 +6,9 @@
 
 ## 特性
 
-- 支持 Article Content Protocol v1 的全部节点和 marks。
+- 支持 Article Content Protocol v1 + Extensions 的全部节点和 marks，兼容旧文档。
+- 支持资源问题快照、宿主控制的后文解锁、实例内锚点定位和取消待跳转任务。
+- 支持文字颜色、高亮、段落字号和双列图片。
 - 使用 Vue 2 `CreateElement` 和 `VNodeData`，不是 Vue 3 兼容层。
 - 支持严格模式和非严格容错渲染。
 - 拦截危险链接和图片 URL。
@@ -401,19 +403,240 @@ function handleArticleButtonClick(payload: ArticleButtonClickPayload): void {
 }
 ```
 
+## revealedKeys：解锁隐藏内容
+
+`revealedKeys` 是由使用方维护的 `string[]`，默认值为 `[]`，通过 `:revealed-keys="revealedKeys"` 传给组件。数组中的字符串与问题节点的 `attrs.revealKey` 精确匹配，表示页面允许显示该问题之后的内容。
+
+组件接收的 `document` 必须是**完整文章 JSON**。隐藏部分已经在这份 JSON 中，只是暂时不创建 DOM；更新 `revealedKeys` 后，组件从原始完整文档重新计算并渲染后续内容，**不会请求新的 JSON，也不会根据 `resourceId` 请求问题数据**。新显示的图片可能触发浏览器正常的图片资源请求。
+
+### 完整 Vue 2 示例：选择后解锁
+
+下面的示例采用“选择即允许”的页面规则：初始显示引言和问题，点击“继续阅读”后，页面将事件中的 `revealKey` 加入列表，组件显示后文并定位到 `details` 段落。也可以点击页面的“直接解锁”按钮，演示从外部控制显示。
+
+```vue
+<script lang="ts">
+import Vue from 'vue'
+import {
+  ArticleContentRenderer,
+  type ArticleDocument,
+  type ArticleRendererRuntime,
+  type ResourceQuestionSelectEvent,
+} from 'article-content-renderer-vue2'
+import 'article-content-renderer-vue2/style.css'
+
+export default Vue.extend({
+  components: { ArticleContentRenderer },
+  data() {
+    const article: ArticleDocument = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '这段引言始终显示。' }] },
+        {
+          type: 'resourceQuestion',
+          attrs: {
+            id: 'question-1',
+            resourceId: 'resource-123',
+            title: '准备好继续阅读了吗？',
+            description: '选择后显示后续内容。',
+            options: [{ id: 'read', label: '继续阅读', targetAnchorId: 'details' }],
+            hideFollowing: true,
+            revealKey: 'article-content',
+          },
+        },
+        {
+          type: 'paragraph',
+          attrs: { anchorId: 'details' },
+          content: [{ type: 'text', text: '这是解锁后显示的正文，始终保存在完整 JSON 中。' }],
+        },
+      ],
+    }
+    return {
+      article,
+      articleKey: 1,
+      revealedKeys: [] as string[],
+      runtime: null as ArticleRendererRuntime | null,
+    }
+  },
+  methods: {
+    rememberRuntime(runtime: ArticleRendererRuntime): void {
+      this.runtime = runtime
+    },
+    handleOptionSelect(event: ResourceQuestionSelectEvent): void {
+      // 本示例的业务规则是“选择即允许”。组件只发事件，不会自行解锁。
+      this.unlockContent(event.revealKey)
+    },
+    unlockContent(revealKey: string): void {
+      this.revealedKeys = [...new Set([...this.revealedKeys, revealKey])]
+    },
+    hideContent(revealKey: string): void {
+      this.runtime?.cancelPendingNavigation()
+      this.revealedKeys = this.revealedKeys.filter((key) => key !== revealKey)
+    },
+    switchArticle(nextArticle: ArticleDocument): void {
+      this.runtime?.cancelPendingNavigation()
+      this.revealedKeys = []
+      this.articleKey += 1
+      this.article = nextArticle
+    },
+  },
+})
+</script>
+
+<template>
+  <main>
+    <button type="button" @click="unlockContent('article-content')">直接解锁</button>
+    <button type="button" @click="hideContent('article-content')">重新隐藏</button>
+    <article>
+      <ArticleContentRenderer
+        :key="articleKey"
+        :document="article"
+        :article-key="articleKey"
+        :revealed-keys="revealedKeys"
+        @renderer-ready="rememberRuntime"
+        @option-select="handleOptionSelect"
+      />
+    </article>
+  </main>
+</template>
+```
+
+示例中的 `article-content` 是保存在 JSON 中的固定标识，可以替换为编辑器保存的随机值。选项事件始终返回当前问题的真实 `event.revealKey`，使用方不必预先知道它，也不要假定它等于问题 ID、资源 ID 或目标段落 ID。
+
+`option-select` 携带 `{ questionId, resourceId, optionId, revealKey, targetAnchorId? }`。组件先记录目标，再发出事件；默认在宿主更新列表、DOM 和布局就绪后定位。可通过下面的 `onAnchorNavigate` 回调控制滚动时机。没有目标的选项仍可解锁，只是不跳转。外部按钮直接解锁时，若没有待定位任务，则只显示内容。
+
+### 多个问题与重新隐藏
+
+组件按顶层顺序扫描，保留首个未解锁问题本身，然后停止渲染其后的全部内容。假设文章为“引言 → 问题 A → 段落 A → 问题 B → 段落 B”，两个问题都开启 `hideFollowing`，标识分别为 `step-1` 和 `step-2`：
+
+| `revealedKeys` | 可见内容 |
+| --- | --- |
+| `[]` | 引言、问题 A |
+| `["step-1"]` | 引言、问题 A、段落 A、问题 B |
+| `["step-2"]` | 引言、问题 A；不能越过前面的未解锁问题 |
+| `["step-1", "step-2"]` | 全文 |
+| `["unknown"]` | 引言、问题 A；未知标识不生效 |
+
+从列表中移除对应标识即可重新隐藏；将列表设为 `[]` 可重新锁定全部隐藏边界。每次都从原始完整文档计算，无需删除或恢复 JSON 节点。`hideFollowing: false` 的问题不会截断正文；没有隐藏问题的旧文章完整显示。同篇文章内所有问题的 `revealKey` 必须唯一，一次允许多个问题时传入多个不同标识。
+
+### 异步业务与文章切换
+
+如果需要业务接口确认，将 `unlockContent(event.revealKey)` 放在业务允许的分支中；请求期间保持列表不变。接口请求由使用方自行发起，渲染器不负责获取业务结果或新的文章 JSON。业务拒绝、失败或主动取消时，调用 `runtime.cancelPendingNavigation()`，避免后续操作触发旧定位；不要在每次选项点击开始时调用它，否则会取消刚记录的本次目标。
+
+切换文章时，使用类似示例中的 `switchArticle(nextArticle)` 方法，清空 `revealedKeys` 和待定位任务，再更新文章与 `articleKey`。`articleKey` 变化会取消旧定位，但**不会替使用方清空传入的解锁列表**。异步请求还需检查文章版本或加载代次、交互序号，忽略旧文章或旧选择的返回结果；重新隐藏和卸载时也要使旧请求失效。完整异步示例见 [Vue 2 资源问题接入](./docs/resource-question-vue2.md#宿主异步业务)。
+
+`revealedKeys` 是页面运行时状态，不写入文章 JSON。不同文章可以使用相同固定 `revealKey`，因此不能共享一份全局解锁列表；需要恢复阅读进度时，应由使用方按用户、文章及版本隔离保存。
+
+隐藏只控制展示，完整文章数据仍在客户端；敏感内容应由服务器在鉴权后返回，`revealKey` 不能作为密码或授权凭证。
+
+可运行示例：启动 Demo，在“隐藏内容解锁示例”面板点击“载入解锁示例”，观察选项事件、解锁列表与正文变化。相关源码见 [主 Demo](./demo/App.vue) 和 [异步资源问题 Demo](./demo/ResourceQuestionDemo.vue)。
+
+## onAnchorNavigate：由使用方决定滚动时机
+
+`onAnchorNavigate` 是可选的函数 Prop，通过 `:on-anchor-navigate="handleAnchorNavigate"` 传入。它与 `@option-select` 分工不同：`option-select` 用于处理选择和业务解锁，`onAnchorNavigate` 用于决定何时滚动。
+
+- **不传回调**：可见目标在点击后直接按默认流程滚动；如果目标尚未渲染，仍需等待 `revealedKeys` 解锁和 DOM、布局就绪。“默认立即滚动”不会自动解锁内容。
+- **传入回调**：在有有效目标的选项被点击后，组件先发出 `option-select`，再调用一次回调。目标可以仍处于隐藏状态；组件不会自动滚动，只有使用方调用 `request.scrollToAnchor()` 后才执行定位。
+- 提前调用 `scrollToAnchor()` 时，组件会等待目标解锁并完成渲染；在目标已显示后调用也可以。调用此方法不会修改 `revealedKeys`，也不会请求新的 JSON。
+
+### 示例：点击页面按钮后再滚动
+
+在上面的 Vue 2 解锁示例中，额外导入 `ResourceQuestionNavigationRequest`，并在 `data` 和 `methods` 中增加以下内容，原有的解锁逻辑继续保留：
+
+```ts
+import type { ResourceQuestionNavigationRequest } from 'article-content-renderer-vue2'
+
+// data() 返回的对象中增加：
+pendingNavigation: null as ResourceQuestionNavigationRequest | null
+
+// methods 中增加：
+handleAnchorNavigate(request: ResourceQuestionNavigationRequest): void {
+  this.pendingNavigation = request
+},
+scrollWhenReady(): void {
+  this.pendingNavigation?.scrollToAnchor()
+  this.pendingNavigation = null
+},
+cancelNavigation(): void {
+  this.pendingNavigation?.cancel()
+  this.pendingNavigation = null
+}
+```
+
+模板中把回调传给组件，再添加操作按钮：
+
+```vue
+<main>
+  <button type="button" :disabled="!pendingNavigation" @click="scrollWhenReady">
+    滚动到所选锚点
+  </button>
+  <article>
+    <ArticleContentRenderer
+      :key="articleKey"
+      :document="article"
+      :article-key="articleKey"
+      :revealed-keys="revealedKeys"
+      :on-anchor-navigate="handleAnchorNavigate"
+      @renderer-ready="rememberRuntime"
+      @option-select="handleOptionSelect"
+    />
+  </article>
+</main>
+```
+
+此时，点击正文选项可以先解锁并显示后文，但不会滚动；点击“滚动到所选锚点”才请求定位。在原有的 `handleOptionSelect`、`hideContent`、`switchArticle` 中也应将 `pendingNavigation` 设为 `null`，清理页面保存的旧句柄；组件自身仍会校验请求是否有效。
+
+回调也可以等待弹窗关闭、动画结束等异步操作，再显式调用 `request.scrollToAnchor()`。**回调返回、Promise 完成或目标变为可见，都不会替代这次显式调用。**
+
+### 回调类型与取消规则
+
+```ts
+interface ResourceQuestionNavigationRequest extends ResourceQuestionSelectEvent {
+  targetAnchorId: string
+  scrollToAnchor(): void
+  cancel(): void
+}
+
+type OnAnchorNavigate = (
+  request: Readonly<ResourceQuestionNavigationRequest>,
+) => void | Promise<void>
+```
+
+请求包含 `questionId`、`resourceId`、`optionId`、`revealKey` 和 `targetAnchorId`。`scrollToAnchor()` 继续使用组件的实例内锚点、`scrollContainer`、`scrollOffset` 和焦点处理。`request.cancel()` 只取消该次点击的定位，不改变解锁列表；也可使用 `renderer-ready` 提供的 `runtime.cancelPendingNavigation()` 取消当前定位。
+
+没有绑定锚点或锚点已不存在时，仍发出 `option-select`，但不会调用 `onAnchorNavigate`。同步在 `option-select` 中取消定位时，也不会再调用该次导航回调。每次有效点击只回调一次，重新渲染不会重复回调。
+
+新选择、文章对象或 `articleKey` 变化、移除解锁标识、主动取消、卸载以及成功滚动后，旧请求的 `scrollToAnchor()` 和 `cancel()` 都不再生效，因此过期的异步回调不会影响新选择。更改回调 Prop 只影响后续点击，已经交给使用方的请求仍需显式执行或取消。
+
+回调抛出异常或返回的 Promise 拒绝时，组件会取消仍有效的本次定位，并通过 `render-error` 报告 `NAVIGATION_CALLBACK_FAILED`，不会退回自动滚动。过期回调的失败不影响新请求。
+
+两个 Demo 的解锁面板均提供“由页面决定滚动时机”开关：关闭时不传回调，开启后通过“滚动到所选锚点”按钮手动调用回调提供的方法。
+
 ## Props
+
+资源问题完整接入说明及异步业务示例见 [Vue 2 资源问题接入](./docs/resource-question-vue2.md)。
 
 | Prop | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `document` | `unknown` | 必填 | Article Content Protocol 文档 |
 | `protocolVersion` | `number` | `1` | 协议适配器版本 |
 | `strict` | `boolean` | `false` | 校验失败时是否停止整篇正文渲染 |
+| `revealedKeys` | `string[]` | `[]` | 宿主允许的解锁标识；选项点击不自动修改 |
+| `articleKey` | `string \| number` | `undefined` | 文章版本或加载代次，变化时取消旧定位；宿主仍须重置解锁状态 |
+| `scrollContainer` | `HTMLElement \| (() => HTMLElement \| null)` | `undefined` | 目标滚动容器，省略时滚动页面 |
+| `scrollOffset` | `number` | `0` | 定位时顶部遮挡偏移，单位 px |
+| `onAnchorNavigate` | `OnAnchorNavigate` | `undefined` | 可选滚动回调；传入后须显式调用 `request.scrollToAnchor()`，省略时默认定位 |
 | `customSlots` | `CustomSlot[]` | `[]` | 配置一个或多个具名插槽的顶层正文插入位置 |
 | `imageBaseUrl` | `string` | `"https://www.doitme.link/"` | 替换文档图片的默认地址前缀 |
 | `resolveArticleButtonLink` | `ResolveArticleButtonLink` | `undefined` | 为 text/button 生成完整链接；link 类型不调用 |
 | `resolveCustomLink` | `ResolveCustomLink` | `undefined` | 仅为 `type: "custom"` 的 link mark 生成完整安全链接 |
 
 ## Events
+
+### option-select / renderer-ready
+
+`option-select` 返回 `{ questionId, resourceId, optionId, revealKey, targetAnchorId? }`。宿主业务允许后更新 `revealedKeys`；默认等待 DOM 和布局后定位可见目标。配置 `onAnchorNavigate` 后，还需使用方显式调用 `request.scrollToAnchor()`。
+
+`renderer-ready` 返回 `ArticleRendererRuntime`，提供 `cancelPendingNavigation()`。Vue 2 函数式组件没有可通过 `ref` 获取的实例，请保存这个运行时句柄，在拒绝、失败或主动取消时调用。
 
 ### article-button-click
 
@@ -436,12 +659,15 @@ interface RenderIssue {
   path: string
   message: string
   nodeType?: string
+  severity?: 'error' | 'warning'
 }
 ```
 
 ## 校验和 URL 安全
 
 校验同时覆盖 JSON 结构、`contentModel` 和跨节点约束：
+
+使用仓库中的最新 `documentSchema` 校验结构，并保留旧版允许省略的默认字段。重复问题 ID、revealKey、anchorId 或问题内选项 ID 会报错并停止渲染；包含资源问题的文章即使非严格模式也必须通过结构校验。失效目标是 `MISSING_ANCHOR` 警告，不会使整篇文章失效。
 
 - `block+`、`listItem+`、`tableRow+` 等内容不能为空。
 - `codeBlock` 最多包含一个 text 节点。
@@ -489,6 +715,12 @@ npm run dev
 ```
 
 默认访问 `http://localhost:5173`。Demo 包含全部主要节点、可编辑 articleButton resolver、严格模式、错误列表和 JSON 查看器。
+
+资源问题独立 Demo：`http://localhost:5173/?demo=resource-question`，提供两步解锁、异步允许、拒绝、取消及切换文章演示。
+
+两个 Demo 都提供“传入文章 JSON”输入区：粘贴后点击“应用 JSON”更新预览，也可“恢复示例”。解析或协议校验失败会显示错误并保留当前文章；资源问题 Demo 应用成功后会清空解锁状态并取消旧的异步操作和定位。
+
+解锁操作示例：在“隐藏内容解锁示例”面板点击“载入解锁示例”，再点击正文中的“先了解基础”。主 Demo 会把事件的 `revealKey` 加入 `revealedKeys` 并显示后文；面板会同步展示收到的标识和当前列表。每个隐藏边界还提供“解锁此处后文”和“重新隐藏此处后文”按钮，可验证多个边界按顺序生效。应用其他文章会重置解锁状态；独立资源问题 Demo 还可切换延迟允许或拒绝。
 
 动态 resolver 编辑器只用于本地 Demo；生产项目应在 Vue/TypeScript 源码中定义 resolver。
 

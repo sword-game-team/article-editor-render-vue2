@@ -2,9 +2,9 @@
   "fileFormat": "article-content-protocol",
   "fileFormatVersion": 1,
   "mediaType": "application/vnd.article-content-protocol+json",
-  "id": "article-content-v1",
+  "id": "article-content-v1-with-extensions",
   "version": 1,
-  "name": "Article Content Protocol v1",
+  "name": "Article Content Protocol v1 + Extensions",
   "status": "draft",
   "rootNode": "doc",
   "nodes": [
@@ -35,13 +35,34 @@
             "right",
             "justify"
           ]
+        },
+        {
+          "name": "anchorId",
+          "type": "string",
+          "required": false,
+          "description": "Stable paragraph/heading anchor, unique within the article."
+        },
+        {
+          "name": "fontSize",
+          "type": "integer",
+          "required": false,
+          "description": "Applied to paragraph.attrs.fontSize alongside the unchanged v1 paragraph attributes. Omit to inherit the default size. Consumers must support this optional extension.",
+          "minimum": 8,
+          "maximum": 96
         }
       ],
       "render": {
         "mode": "element",
         "element": "p",
         "styleBindings": {
-          "textAlign": "text-align"
+          "textAlign": "text-align",
+          "fontSize": "font-size"
+        },
+        "styleUnits": {
+          "fontSize": "px"
+        },
+        "attributeBindings": {
+          "anchorId": "data-anchor-id"
         }
       }
     },
@@ -78,6 +99,12 @@
             "right",
             "justify"
           ]
+        },
+        {
+          "name": "anchorId",
+          "type": "string",
+          "required": false,
+          "description": "Stable paragraph/heading anchor, unique within the article."
         }
       ],
       "render": {
@@ -94,6 +121,9 @@
         ],
         "styleBindings": {
           "textAlign": "text-align"
+        },
+        "attributeBindings": {
+          "anchorId": "data-anchor-id"
         }
       }
     },
@@ -238,6 +268,15 @@
             "center",
             "right"
           ]
+        },
+        {
+          "name": "imageLayout",
+          "type": "string",
+          "required": false,
+          "description": "Applied to image.attrs.imageLayout. Adjacent two-column images flow two per row in document order. Other blocks break the row. Omit for the original full-row image layout.",
+          "allowedValues": [
+            "two-column"
+          ]
         }
       ],
       "render": {
@@ -250,8 +289,14 @@
           "title": "title",
           "width": "width",
           "height": "height",
-          "imageAlign": "data-image-align"
-        }
+          "imageAlign": "data-image-align",
+          "imageLayout": "data-image-layout"
+        },
+        "layoutNotes": [
+          "Constrain display width to the container. When width and height are supplied, scale height proportionally; do not crop the image. Preserve the original dimensions in JSON.",
+          "Adjacent sibling images with imageLayout=two-column occupy half a row each, with a gap. Every two images wrap; intervening non-image blocks start a new row. Omit imageLayout for a full-row container.",
+          "imageAlign controls horizontal alignment inside the image layout container; omission means center."
+        ]
       }
     },
     {
@@ -372,6 +417,58 @@
       "render": {
         "mode": "text"
       }
+    },
+    {
+      "type": "resourceQuestion",
+      "description": "Top-level resource question snapshot. Rendering never fetches resource data.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.id"
+        },
+        {
+          "name": "resourceId",
+          "type": "string",
+          "required": true,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.resourceId"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.title"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": true,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.description"
+        },
+        {
+          "name": "options",
+          "type": "array",
+          "required": true,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.options"
+        },
+        {
+          "name": "hideFollowing",
+          "type": "boolean",
+          "required": true,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.hideFollowing"
+        },
+        {
+          "name": "revealKey",
+          "type": "string",
+          "required": true,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.revealKey"
+        }
+      ],
+      "render": {
+        "mode": "component",
+        "element": "resource-question"
+      }
     }
   ],
   "marks": [
@@ -486,12 +583,52 @@
           "target": "target"
         }
       }
+    },
+    {
+      "type": "textStyle",
+      "description": "Text foreground color.",
+      "attributes": [
+        {
+          "name": "color",
+          "type": "string",
+          "required": true,
+          "description": "A six-digit hexadecimal CSS color, including the leading #.",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      ],
+      "render": {
+        "mode": "element",
+        "element": "span",
+        "styleBindings": {
+          "color": "color"
+        }
+      }
+    },
+    {
+      "type": "highlight",
+      "description": "Text background highlight color.",
+      "attributes": [
+        {
+          "name": "color",
+          "type": "string",
+          "required": true,
+          "description": "A six-digit hexadecimal CSS color, including the leading #.",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      ],
+      "render": {
+        "mode": "element",
+        "element": "mark",
+        "styleBindings": {
+          "color": "background-color"
+        }
+      }
     }
   ],
   "documentSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "$id": "urn:article-content-protocol:v1",
-    "title": "Article Content Protocol v1",
+    "$id": "urn:article-content-protocol:v1:with-formatting-extensions",
+    "title": "Article Content Protocol v1 + Extensions",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -505,7 +642,14 @@
       "content": {
         "type": "array",
         "items": {
-          "$ref": "#/definitions/blockNode"
+          "oneOf": [
+            {
+              "$ref": "#/definitions/blockNode"
+            },
+            {
+              "$ref": "#/definitions/resourceQuestion"
+            }
+          ]
         }
       }
     },
@@ -560,6 +704,21 @@
             "properties": {
               "textAlign": {
                 "$ref": "#/definitions/textAlign"
+              },
+              "fontSize": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "$id": "urn:article-content-protocol:paragraph-font-size:v1",
+                "title": "Optional paragraph fontSize attribute (pixels)",
+                "description": "Applied to paragraph.attrs.fontSize alongside the unchanged v1 paragraph attributes. Omit to inherit the default size. Consumers must support this optional extension.",
+                "type": "integer",
+                "minimum": 8,
+                "maximum": 96
+              },
+              "anchorId": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S",
+                "description": "Stable paragraph/heading anchor, unique within the article."
               }
             }
           },
@@ -596,6 +755,12 @@
               },
               "textAlign": {
                 "$ref": "#/definitions/textAlign"
+              },
+              "anchorId": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S",
+                "description": "Stable paragraph/heading anchor, unique within the article."
               }
             }
           },
@@ -793,6 +958,16 @@
               },
               "imageAlign": {
                 "$ref": "#/definitions/imageAlign"
+              },
+              "imageLayout": {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "$id": "urn:article-content-protocol:image-layout:v1",
+                "title": "Optional two-column image layout",
+                "description": "Applied to image.attrs.imageLayout. Adjacent two-column images flow two per row in document order. Other blocks break the row. Omit for the original full-row image layout.",
+                "type": "string",
+                "enum": [
+                  "two-column"
+                ]
               }
             }
           }
@@ -1074,9 +1249,198 @@
                 ]
               }
             }
+          },
+          {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "urn:article-content-protocol:text-formatting:v1",
+            "title": "Optional text formatting marks for Article Content Protocol v1",
+            "description": "Additional marks accepted alongside the unchanged v1 marks. Existing v1 documents require no migration. Consumers must support these marks to render colored documents.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "attrs"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "textStyle",
+                  "highlight"
+                ]
+              },
+              "attrs": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "color"
+                ],
+                "properties": {
+                  "color": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  }
+                }
+              }
+            }
           }
         ]
+      },
+      "resourceQuestion": {
+        "$id": "urn:article-content-protocol:resource-question:v1",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "attrs"
+        ],
+        "properties": {
+          "type": {
+            "const": "resourceQuestion"
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "resourceId",
+              "title",
+              "description",
+              "options",
+              "hideFollowing",
+              "revealKey"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "label"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "targetAnchorId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    }
+                  }
+                }
+              },
+              "hideFollowing": {
+                "type": "boolean"
+              },
+              "revealKey": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "resourceId": {
+                      "const": ""
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "title": {
+                      "const": ""
+                    },
+                    "description": {
+                      "const": ""
+                    },
+                    "options": {
+                      "maxItems": 0
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "resourceId": {
+                      "pattern": "\\S"
+                    },
+                    "title": {
+                      "minLength": 1,
+                      "pattern": "\\S"
+                    },
+                    "options": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
       }
     }
+  },
+  "baseProtocol": {
+    "id": "article-content-v1",
+    "version": 1
+  },
+  "extensions": [
+    {
+      "id": "text-formatting",
+      "version": 1,
+      "schemaId": "urn:article-content-protocol:text-formatting:v1"
+    },
+    {
+      "id": "paragraph-font-size",
+      "version": 1,
+      "schemaId": "urn:article-content-protocol:paragraph-font-size:v1"
+    },
+    {
+      "id": "image-layout",
+      "version": 1,
+      "schemaId": "urn:article-content-protocol:image-layout:v1"
+    },
+    {
+      "id": "resource-question",
+      "version": 1,
+      "schemaId": "urn:article-content-protocol:resource-question:v1"
+    },
+    {
+      "id": "paragraph-anchor",
+      "version": 1
+    }
+  ],
+  "resourceQuestionRules": {
+    "data": "Save the selected resourceId, title, description and options as a snapshot. Option IDs are stable strings supplied by the resource. Do not fetch on render.",
+    "identity": "Question id, revealKey and paragraph/heading anchorId must each be unique within the document; option id must be unique within its question. Enforce these semantic checks in addition to JSON Schema.",
+    "draft": "resourceId=\"\" with empty title, description and options is an unconfigured placeholder. Render a neutral placeholder; never unlock automatically.",
+    "placement": "resourceQuestion is allowed only as a direct child of doc.",
+    "navigation": "Match the selected option.targetAnchorId to a paragraph or heading in this article instance. Missing/unbound targets do not navigate. After business-controlled reveal, wait for layout before scrolling.",
+    "visibility": "Scan top-level nodes in order. Include a resourceQuestion, then stop if hideFollowing=true and its revealKey is absent from the host-supplied revealed keys. Recompute from the original document when keys change. Clicking an option does not automatically unlock.",
+    "security": "Visibility is presentation only, not authorization. Hidden article data remains in the JSON; sensitive data must be protected on the server."
   }
 }

@@ -30,6 +30,7 @@ interface ArticleContentRendererProps {
   strict: boolean
   customSlots: CustomSlot[]
   imageBaseUrl: string
+  resourceQuestionFooterText: string
   resolveArticleButtonLink?: ResolveArticleButtonLink
   resolveCustomLink?: ResolveCustomLink
   revealedKeys: string[]
@@ -177,6 +178,7 @@ const ArticleContentRenderer = {
     },
     scrollOffset: { type: Number, default: 0 },
     onAnchorNavigate: { type: Function as PropType<OnAnchorNavigate>, default: undefined },
+    resourceQuestionFooterText: { type: String, default: '' },
   },
   render(createElement, context): VNode | VNode[] {
     const { props } = context
@@ -223,6 +225,7 @@ const ArticleContentRenderer = {
       createElement,
       customSlots: resolveCustomSlots(context),
       imageBaseUrl: props.imageBaseUrl,
+      resourceQuestionFooterText: props.resourceQuestionFooterText,
       resolveArticleButtonLink: props.resolveArticleButtonLink,
       resolveCustomLink: props.resolveCustomLink,
       emitArticleButtonClick: (payload: ArticleButtonClickPayload) =>

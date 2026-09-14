@@ -8,6 +8,7 @@
       "attrs": {
         "id": "question-route", "resourceId": "reading-route", "title": "你想从哪里开始？",
         "description": "可以先看基础内容，也可以请求定位总结。总结还需要第二步解锁。",
+        "image": { "src": "/demo-image.svg", "alt": "阅读路线示意图", "width": 800, "height": 400 },
         "options": [
           { "id": "basics", "label": "先了解基础", "targetAnchorId": "basics" },
           { "id": "summary", "label": "跳转到总结", "targetAnchorId": "summary" },

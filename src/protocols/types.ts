@@ -12,6 +12,7 @@ export interface RenderContext {
   createElement: CreateElement
   customSlots: readonly ResolvedCustomSlot[]
   imageBaseUrl: string
+  resourceQuestionFooterText: string
   resolveArticleButtonLink?: ResolveArticleButtonLink
   resolveCustomLink?: ResolveCustomLink
   emitArticleButtonClick: (payload: ArticleButtonClickPayload) => void

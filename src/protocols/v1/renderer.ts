@@ -11,6 +11,7 @@ import type {
   TextAlign,
 } from '../../types.js'
 import { replaceImageBaseUrl, sanitizeUrl, secureRel } from '../../core/url.js'
+import { sanitizeResourceQuestionImageUrl } from '../../core/resource-question-image.js'
 import type { RenderContext, ResolvedCustomSlot } from '../types.js'
 
 type UnknownRecord = Record<string, unknown>
@@ -572,14 +573,32 @@ function anchorProps(attrs: UnknownRecord, context: RenderContext): UnknownRecor
   }
 }
 
-function renderResourceQuestion(node: UnknownRecord, context: RenderContext): VNode {
+function renderResourceQuestion(node: UnknownRecord, path: string, context: RenderContext): VNode {
   const attrs = recordValue(node.attrs)
   const options = context.navigation.selections.get(attrs.id as string)
-  const children: VNode[] = []
+  let image: VNode | undefined
+  if (isRecord(attrs.image)) {
+    const src = sanitizeResourceQuestionImageUrl(replaceImageBaseUrl(attrs.image.src, context.imageBaseUrl))
+    if (src) {
+      image = createVNode(context, 'img', {
+        class: 'acp-resource-question__image', src,
+        alt: typeof attrs.image.alt === 'string' ? attrs.image.alt : '',
+        title: attrs.image.title,
+        width: attrs.image.width,
+        height: attrs.image.height,
+      })
+    } else {
+      report(context, {
+        code: 'UNSAFE_URL', path: childPath(path, 'attrs', 'image', 'src'), nodeType: 'resourceQuestion',
+        message: 'The question image URL is malformed or uses a disallowed protocol.',
+      })
+    }
+  }
+  const children: VNode[] = image ? [image] : []
   if (attrs.resourceId === '') {
     children.push(createVNode(context, 'p', { class: 'acp-resource-question__placeholder' }, '暂无问题内容'))
   } else {
-    children.push(createVNode(context, 'legend', { class: 'acp-resource-question__title' }, String(attrs.title)))
+    children.push(createVNode(context, 'div', { class: 'acp-resource-question__title' }, String(attrs.title)))
     if (attrs.description) children.push(createVNode(context, 'p', { class: 'acp-resource-question__description' }, String(attrs.description)))
     children.push(createVNode(context, 'div', { class: 'acp-resource-question__options' },
       arrayValue(attrs.options).filter(isRecord).map((option) => createVNode(context, 'button', {
@@ -592,9 +611,14 @@ function renderResourceQuestion(node: UnknownRecord, context: RenderContext): VN
       }, String(option.label))),
     ))
   }
-  return createVNode(context, 'fieldset', {
+  const footerText = context.resourceQuestionFooterText
+  if (typeof footerText === 'string' && footerText.trim()) {
+    children.push(createVNode(context, 'p', { class: 'acp-resource-question__footer' }, footerText))
+  }
+  return createVNode(context, 'div', {
     class: 'acp-resource-question', 'data-node-type': 'resourceQuestion',
     'data-question-id': attrs.id,
+    role: 'group', 'aria-label': attrs.title || '暂无问题内容',
   }, children)
 }
 
@@ -654,7 +678,7 @@ function renderDocumentContent(document: UnknownRecord, context: RenderContext):
     })
     if (isRecord(node) && node.type === 'resourceQuestion') {
       row = undefined
-      rendered.push(renderResourceQuestion(node, context))
+      rendered.push(renderResourceQuestion(node, childPath('/content', index), context))
       const attrs = recordValue(node.attrs)
       if (attrs.hideFollowing === true && !allowed.has(attrs.revealKey as string)) break
     } else row = appendBlock(rendered, node, childPath('/content', index), context, row)

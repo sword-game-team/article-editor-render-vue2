@@ -195,11 +195,20 @@ export interface ResourceQuestionOption {
   targetAnchorId?: string
 }
 
+export interface ResourceQuestionImage {
+  src: string
+  alt?: string
+  title?: string
+  width?: number
+  height?: number
+}
+
 export interface ResourceQuestionAttrs {
   id: string
   resourceId: string
   title: string
   description: string
+  image?: ResourceQuestionImage
   options: ResourceQuestionOption[]
   hideFollowing: boolean
   revealKey: string

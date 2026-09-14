@@ -64,6 +64,7 @@ export type {
   ResolveArticleButtonLink,
   ResolveCustomLink,
   ResourceQuestionAttrs,
+  ResourceQuestionImage,
   ResourceQuestionNode,
   ResourceQuestionOption,
   ResourceQuestionSelectEvent,

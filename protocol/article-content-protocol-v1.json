@@ -40,7 +40,7 @@
           "name": "anchorId",
           "type": "string",
           "required": false,
-          "description": "Stable paragraph/heading anchor, unique within the article."
+          "description": "Stable paragraph/heading anchor, unique within the article. New resource option bindings use the external option ID; existing anchors remain valid."
         },
         {
           "name": "fontSize",
@@ -104,7 +104,7 @@
           "name": "anchorId",
           "type": "string",
           "required": false,
-          "description": "Stable paragraph/heading anchor, unique within the article."
+          "description": "Stable paragraph/heading anchor, unique within the article. New resource option bindings use the external option ID; existing anchors remain valid."
         }
       ],
       "render": {
@@ -447,6 +447,12 @@
           "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.description"
         },
         {
+          "name": "image",
+          "type": "object",
+          "required": false,
+          "description": "See documentSchema.definitions.resourceQuestion.properties.attrs.properties.image"
+        },
+        {
           "name": "options",
           "type": "array",
           "required": true,
@@ -718,7 +724,7 @@
                 "type": "string",
                 "minLength": 1,
                 "pattern": "\\S",
-                "description": "Stable paragraph/heading anchor, unique within the article."
+                "description": "Stable paragraph/heading anchor, unique within the article. New resource option bindings use the external option ID; existing anchors remain valid."
               }
             }
           },
@@ -760,7 +766,7 @@
                 "type": "string",
                 "minLength": 1,
                 "pattern": "\\S",
-                "description": "Stable paragraph/heading anchor, unique within the article."
+                "description": "Stable paragraph/heading anchor, unique within the article. New resource option bindings use the external option ID; existing anchors remain valid."
               }
             }
           },
@@ -1324,6 +1330,9 @@
               "description": {
                 "type": "string"
               },
+              "image": {
+                "$ref": "urn:article-content-protocol:resource-question-image:v1"
+              },
               "options": {
                 "type": "array",
                 "items": {
@@ -1347,7 +1356,8 @@
                     "targetAnchorId": {
                       "type": "string",
                       "minLength": 1,
-                      "pattern": "\\S"
+                      "pattern": "\\S",
+                      "description": "Target paragraph/heading anchorId. New editor bindings use this option's id; legacy anchor values remain supported."
                     }
                   }
                 }
@@ -1401,6 +1411,38 @@
             ]
           }
         }
+      },
+      "resourceQuestionImage": {
+        "$id": "urn:article-content-protocol:resource-question-image:v1",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "src"
+        ],
+        "description": "Optional image snapshot above the resource question title. Omit the image attribute when absent. Fit container width with proportional height, without cropping.",
+        "properties": {
+          "src": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!.*[\\u0000-\\u0020\\u007f\\\\])(?:(?:[hH][tT][tT][pP][sS]?:)?//[^/?#]+\\S*|(?!(?:[a-zA-Z][a-zA-Z0-9+.-]*):)\\S+|data:image/(?:png|jpeg|webp|gif|avif|bmp);base64,[a-zA-Z0-9+/=]+)$"
+          },
+          "alt": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        }
       }
     }
   },
@@ -1436,9 +1478,11 @@
   ],
   "resourceQuestionRules": {
     "data": "Save the selected resourceId, title, description and options as a snapshot. Option IDs are stable strings supplied by the resource. Do not fetch on render.",
+    "image": "Optional attrs.image={src,alt?,title?,width?,height?} is a snapshot from the resource or a separate upload. Render it above the title, fit width to the container and preserve aspect ratio without cropping. Omit when absent; older documents need no image. Selecting a resource replaces the image (omission clears it); uploading only replaces image, not question/bindings/gate settings.",
     "identity": "Question id, revealKey and paragraph/heading anchorId must each be unique within the document; option id must be unique within its question. Enforce these semantic checks in addition to JSON Schema.",
     "draft": "resourceId=\"\" with empty title, description and options is an unconfigured placeholder. Render a neutral placeholder; never unlock automatically.",
     "placement": "resourceQuestion is allowed only as a direct child of doc.",
+    "binding": "New editor bindings set paragraph/heading anchorId and option.targetAnchorId to option.id. Existing documents are not automatically migrated; explicitly rebind/convert to use the option ID. Renaming a target with different-option references or relocating a key referenced by another question is rejected without changing data. Unshared option anchors may move to a new target atomically. Same-ID references to a renamed legacy target are updated together. Clearing a binding keeps its anchor; copies receive fresh anchors. Always preserve targetAnchorId for legacy compatibility.",
     "navigation": "Match the selected option.targetAnchorId to a paragraph or heading in this article instance. Missing/unbound targets do not navigate. After business-controlled reveal, wait for layout before scrolling.",
     "visibility": "Scan top-level nodes in order. Include a resourceQuestion, then stop if hideFollowing=true and its revealKey is absent from the host-supplied revealed keys. Recompute from the original document when keys change. Clicking an option does not automatically unlock.",
     "security": "Visibility is presentation only, not authorization. Hidden article data remains in the JSON; sensitive data must be protected on the server."

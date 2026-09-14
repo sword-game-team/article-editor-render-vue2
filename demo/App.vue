@@ -70,6 +70,7 @@ export default Vue.extend({
       defaultArticle: article,
       articleKey: 1,
       revealedKeys: [] as string[],
+      resourceQuestionFooterText: '请选择一个选项，继续阅读后续内容。',
       runtime: null as ArticleRendererRuntime | null,
       lastOption: null as ResourceQuestionSelectEvent | null,
       manualNavigation: false,
@@ -211,6 +212,8 @@ export default Vue.extend({
           :document="article"
           :revealed-keys="revealedKeys"
           :last-event="lastOption"
+          :footer-text="resourceQuestionFooterText"
+          @footer-text="resourceQuestionFooterText = $event"
           :manual-navigation="manualNavigation"
           :pending-navigation="pendingNavigation"
           @navigation-mode="changeNavigationMode"
@@ -336,6 +339,7 @@ export default Vue.extend({
             :article-key="articleKey"
             :revealed-keys="revealedKeys"
             :on-anchor-navigate="manualNavigation ? handleAnchorNavigate : undefined"
+            :resource-question-footer-text="resourceQuestionFooterText"
             :strict="strict"
             :custom-slots="customSlots"
             :resolve-article-button-link="resolveArticleButtonLink"

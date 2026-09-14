@@ -403,6 +403,52 @@ function handleArticleButtonClick(payload: ArticleButtonClickPayload): void {
 }
 ```
 
+## resourceQuestion：描述与底部文本
+
+资源问题统一使用 `<div class="acp-resource-question" role="group">` 容器，按“图片（可选）→ 标题 → 描述 → 选项 → 底部文本（可选）”的顺序渲染。描述读取文章 JSON 中的 `resourceQuestion.attrs.description`，有内容时显示在标题下方；保留换行并按纯文本展示。
+
+通过组件 Prop `resourceQuestionFooterText` 传入问题底部的文本：
+
+```vue
+<ArticleContentRenderer
+  :document="article"
+  resource-question-footer-text="请选择一个选项，继续阅读后续内容。"
+/>
+```
+
+也可以绑定响应式变量：
+
+```vue
+<ArticleContentRenderer
+  :document="article"
+  :resource-question-footer-text="questionFooterText"
+/>
+```
+
+`questionFooterText` 由使用方在 `data` 中声明并更新。该 Prop 默认为空字符串，对当前组件内所有可见的问题生效，在选项下方显示；不传、空字符串或纯空白时不创建底部文本节点。文本保留换行，HTML 标签会作为文字显示。它只影响展示，不写入文章 JSON，也不改变点击、解锁或滚动逻辑。
+
+两个 Demo 的解锁面板均提供“问题底部文本”输入框，可直接编辑并查看效果。样式可通过 `.acp-resource-question__description` 和 `.acp-resource-question__footer` 覆盖。
+
+## resourceQuestion.image：问题图片
+
+资源问题支持可选的 `attrs.image`，例如在问题的 `attrs` 中加入：
+
+```json
+"image": {
+  "src": "https://example.com/question.png",
+  "alt": "问题配图",
+  "title": "图片说明",
+  "width": 800,
+  "height": 400
+}
+```
+
+`src` 必填；`alt`、`title` 和尺寸均可省略，尺寸必须是 1–10000 的整数。图片显示在问题标题上方，宽度适应容器，高度按比例缩放，不裁剪；尺寸属性用于保留原始比例。没有图片时省略整个 `image` 属性，旧版无图片文章仍然兼容。
+
+问题图片支持 HTTP(S)、相对路径和 PNG/JPEG/WebP/GIF/AVIF/BMP 的 Base64 data URL，沿用 `imageBaseUrl` 的默认前缀替换规则。渲染器直接展示 JSON 中的图片快照，浏览器会正常加载图片地址，不会因此请求问题接口或新的文章 JSON。Demo 的“载入解锁示例”包含问题图片。
+
+如果出现 `/content/.../attrs/image：Property "image" is not allowed.`，说明所使用的渲染器或协议仍未支持该字段，需同步更新协议文件、校验器和渲染器。
+
 ## revealedKeys：解锁隐藏内容
 
 `revealedKeys` 是由使用方维护的 `string[]`，默认值为 `[]`，通过 `:revealed-keys="revealedKeys"` 传给组件。数组中的字符串与问题节点的 `attrs.revealKey` 精确匹配，表示页面允许显示该问题之后的内容。
@@ -621,6 +667,7 @@ type OnAnchorNavigate = (
 | `protocolVersion` | `number` | `1` | 协议适配器版本 |
 | `strict` | `boolean` | `false` | 校验失败时是否停止整篇正文渲染 |
 | `revealedKeys` | `string[]` | `[]` | 宿主允许的解锁标识；选项点击不自动修改 |
+| `resourceQuestionFooterText` | `string` | `""` | 在每个可见资源问题的选项下方展示的纯文本，支持动态更新；空白时不显示 |
 | `articleKey` | `string \| number` | `undefined` | 文章版本或加载代次，变化时取消旧定位；宿主仍须重置解锁状态 |
 | `scrollContainer` | `HTMLElement \| (() => HTMLElement \| null)` | `undefined` | 目标滚动容器，省略时滚动页面 |
 | `scrollOffset` | `number` | `0` | 定位时顶部遮挡偏移，单位 px |
@@ -735,7 +782,7 @@ interface RenderIssue {
 - 同一张表格的每一行必须具有相同列数。
 - 未知节点、mark、属性和越界值会被报告。
 
-普通链接和 articleButton 允许 `http:`、`https:`、`mailto:`、`tel:`、相对路径和页面锚点。图片允许 `http:`、`https:`、`blob:` 和相对路径。危险协议会被拦截。
+普通链接和 articleButton 允许 `http:`、`https:`、`mailto:`、`tel:`、相对路径和页面锚点。正文 image 节点允许 `http:`、`https:`、`blob:` 和相对路径。资源问题的 `attrs.image` 按其独立协议允许 HTTP(S)、相对路径及指定光栅格式的 Base64 data URL，不接受 `blob:` 或 SVG data URL。危险协议会被拦截。
 
 ## Vue 2 顶层渲染结构
 

@@ -18,6 +18,8 @@ afterEach(() => { wrapper.destroy(); document.body.innerHTML = ''; vi.restoreAll
 describe('Vue 2 host example', () => {
   it('separates delayed business approval from manually requested navigation', async () => {
     const controls = wrapper.findComponent({ name: 'RevealControls' })
+    await controls.find('textarea').setValue('等待处理后继续。')
+    expect(wrapper.find('.acp-resource-question__footer').text()).toBe('等待处理后继续。')
     await controls.find('input[type="checkbox"]').setChecked(true)
     await wrapper.find('[data-option-id="basics"]').trigger('click')
     expect(wrapper.vm.pendingNavigation?.targetAnchorId).toBe('basics')

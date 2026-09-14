@@ -2,6 +2,12 @@
 
 协议版本仍为 `1`，支持最新 `v1 + Extensions`。完整数据示例在 [resource-question.json](../examples/resource-question.json)，原始需求在 [resource-question-rendering.md](resource-question-rendering.md)。
 
+## 问题图片
+
+`resourceQuestion.attrs.image` 是可选的图片快照，结构为 `{ src, alt?, title?, width?, height? }`，公共类型为 `ResourceQuestionImage`。`src` 必填，`alt` 和 `title` 为字符串，宽高为 1–10000 的整数；没有图片时省略此字段。旧版无图片问题仍可正常校验和渲染。
+
+图片显示在标题上方，适应容器宽度并按比例缩放、不裁剪。支持 HTTP(S)、相对路径和 PNG/JPEG/WebP/GIF/AVIF/BMP 的 Base64 data URL，应用 `imageBaseUrl` 前缀替换后再次校验地址。图片不会参与选项身份或隐藏边界判断；隐藏问题的图片同样不创建 DOM。浏览器正常加载图片文件，渲染器不会请求额外的问题或文章 JSON。
+
 ## 组件接口
 
 ```vue
@@ -11,6 +17,7 @@
     :document="article"
     :article-key="articleVersion"
     :revealed-keys="revealedKeys"
+    resource-question-footer-text="请选择一个选项，继续阅读后续内容。"
     :scroll-container="getScrollContainer"
     :scroll-offset="64"
     @renderer-ready="rememberRuntime"
@@ -21,6 +28,10 @@
 ```
 
 `revealedKeys` 默认 `[]`。渲染器从原始文档依次渲染，显示首个未解锁问题后停止，不创建后续正文和插槽的 DOM。点击只发送 `option-select`，不会自行解锁，也不会请求问题资源接口。
+
+问题容器统一为 `div.acp-resource-question`，通过 `role="group"` 和标题标签标识选项组。图片、标题、描述、选项依次展示，描述来自 `attrs.description`，支持换行并按纯文本渲染。
+
+可选字符串 Prop `resourceQuestionFooterText`（模板 `:resource-question-footer-text="footerText"`）在选项下方显示使用方传入的文本，适用于当前组件的所有可见问题，支持响应式更新。默认 `""`；空或纯空白不渲染。底部文本同样按纯文本展示并保留换行，样式类为 `.acp-resource-question__footer`。这是组件展示配置，无需修改协议 JSON。
 
 ```ts
 interface ResourceQuestionSelectEvent {

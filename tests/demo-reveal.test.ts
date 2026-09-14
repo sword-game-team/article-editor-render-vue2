@@ -33,6 +33,8 @@ describe('main demo reveal example', () => {
     const controls = wrapper.findComponent({ name: 'RevealControls' })
     await controls.find('button').trigger('click')
     const original = JSON.stringify(wrapper.vm.article)
+    await controls.find('textarea').setValue('此处显示使用者传入的提示。')
+    expect(wrapper.find('.acp-resource-question__footer').text()).toBe('此处显示使用者传入的提示。')
     expect(wrapper.find('[data-anchor-id="basics"]').exists()).toBe(false)
     await wrapper.find('[data-option-id="basics"]').trigger('click')
     expect(wrapper.vm.revealedKeys).toEqual(['reading-step-1'])

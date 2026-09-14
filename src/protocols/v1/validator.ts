@@ -1,5 +1,6 @@
 import type { RenderIssue, ValidationResult } from '../../types.js'
 import { validateDocumentSchema } from './schema.js'
+import { sanitizeResourceQuestionImageUrl } from '../../core/resource-question-image.js'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -567,12 +568,13 @@ class ProtocolV1Validator {
     const attrs = this.requireRecord(node.attrs, attrsPath, type)
     if (!attrs) return
     const fields = ['id', 'resourceId', 'title', 'description', 'options', 'hideFollowing', 'revealKey']
-    this.checkProperties(attrs, attrsPath, fields, fields, type)
+    this.checkProperties(attrs, attrsPath, [...fields, 'image'], fields, type)
     this.identity(attrs.id, 'questionId', childPath(attrsPath, 'id'))
     this.identity(attrs.revealKey, 'revealKey', childPath(attrsPath, 'revealKey'))
     for (const field of ['resourceId', 'title', 'description']) {
       this.requireString(attrs[field], childPath(attrsPath, field), type, { allowEmpty: true })
     }
+    if ('image' in attrs) this.validateResourceQuestionImage(attrs.image, childPath(attrsPath, 'image'))
     if (typeof attrs.hideFollowing !== 'boolean') {
       this.add('INVALID_TYPE', childPath(attrsPath, 'hideFollowing'), 'Expected a boolean.', type)
     }
@@ -601,6 +603,22 @@ class ProtocolV1Validator {
         this.targets.push({ id: option.targetAnchorId, path: childPath(optionPath, 'targetAnchorId') })
       }
     })
+  }
+
+  private validateResourceQuestionImage(value: unknown, path: string): void {
+    const type = 'resourceQuestion'
+    const image = this.requireRecord(value, path, type)
+    if (!image) return
+    this.checkProperties(image, path, ['src', 'alt', 'title', 'width', 'height'], ['src'], type)
+    if (this.requireString(image.src, childPath(path, 'src'), type) && !sanitizeResourceQuestionImageUrl(image.src)) {
+      this.add('UNSAFE_URL', childPath(path, 'src'), 'The question image URL is malformed or uses a disallowed protocol.', type)
+    }
+    for (const field of ['alt', 'title']) {
+      this.optionalString(image[field], childPath(path, field), type, { allowEmpty: true })
+    }
+    for (const field of ['width', 'height']) {
+      if (field in image) this.requireInteger(image[field], childPath(path, field), type, 1, 10_000)
+    }
   }
 
   private validateArticleButton(node: UnknownRecord, path: string): void {

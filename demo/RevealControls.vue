@@ -7,6 +7,7 @@ export default Vue.extend({
   props: {
     document: { type: Object as PropType<ArticleDocument>, required: true },
     revealedKeys: { type: Array as PropType<string[]>, required: true },
+    footerText: { type: String, default: '' },
     lastEvent: { type: Object as PropType<ResourceQuestionSelectEvent | null>, default: null },
     manualNavigation: { type: Boolean, default: false },
     pendingNavigation: { type: Object as PropType<ResourceQuestionNavigationRequest | null>, default: null },
@@ -21,6 +22,9 @@ export default Vue.extend({
     changeNavigationMode(event: Event): void {
       this.$emit('navigation-mode', (event.target as HTMLInputElement).checked)
     },
+    changeFooterText(event: Event): void {
+      this.$emit('footer-text', (event.target as HTMLTextAreaElement).value)
+    },
   },
 })
 </script>
@@ -30,6 +34,10 @@ export default Vue.extend({
     <h3>隐藏内容解锁示例</h3>
     <p>点击正文中的选项，页面取得事件中的 <code>revealKey</code>，业务允许后加入 <code>revealedKeys</code>，后续内容才会显示。</p>
     <button type="button" @click="$emit('load-example')">载入解锁示例</button>
+    <label class="reveal-demo__footer-input">
+      问题底部文本
+      <textarea :value="footerText" rows="2" placeholder="由使用方传入，留空则不显示" @input="changeFooterText" />
+    </label>
     <p v-if="lastEvent">最近收到的 revealKey：<code data-last-reveal-key>{{ lastEvent.revealKey }}</code></p>
     <p v-else>尚未点击正文选项。</p>
     <details v-if="lastEvent" open>
@@ -95,4 +103,6 @@ this.revealedKeys = this.revealedKeys.filter(key =&gt; key !== revealKey)</pre>
 .reveal-demo__boundaries strong { overflow-wrap: anywhere; }
 .reveal-demo__boundaries span { font-size: 0.8125rem; color: #475569; }
 .reveal-demo summary { cursor: pointer; }
+.reveal-demo__footer-input { display: grid; gap: 0.5rem; margin-block: 1rem; font-size: 0.875rem; }
+.reveal-demo__footer-input textarea { box-sizing: border-box; width: 100%; padding: 0.5rem; border: 1px solid #8eaed7; border-radius: 6px; font: inherit; resize: vertical; }
 </style>

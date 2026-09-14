@@ -16,6 +16,7 @@ export default Vue.extend({
       defaultArticle: freshDocument(),
       articleKey: 1,
       revealedKeys: [] as string[],
+      resourceQuestionFooterText: '请选择一个选项，继续阅读后续内容。',
       runtime: null as ArticleRendererRuntime | null,
       mode: 'delay',
       manualNavigation: false,
@@ -139,6 +140,8 @@ export default Vue.extend({
       :document="article"
       :revealed-keys="revealedKeys"
       :last-event="lastEvent"
+      :footer-text="resourceQuestionFooterText"
+      @footer-text="resourceQuestionFooterText = $event"
       :manual-navigation="manualNavigation"
       :pending-navigation="pendingNavigation"
       @navigation-mode="changeNavigationMode"
@@ -154,6 +157,7 @@ export default Vue.extend({
         :article-key="articleKey"
         :revealed-keys="revealedKeys"
         :on-anchor-navigate="manualNavigation ? handleAnchorNavigate : undefined"
+        :resource-question-footer-text="resourceQuestionFooterText"
         :scroll-container="getScrollContainer"
         :scroll-offset="16"
         strict

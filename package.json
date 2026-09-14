@@ -1,6 +1,6 @@
 {
   "name": "article-content-renderer-vue2",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A safe Vue 2.7 renderer for the Article Content Protocol ProseMirror JSON format.",
   "author": "NovaVoyager",
   "license": "MIT",
